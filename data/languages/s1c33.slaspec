@@ -1,0 +1,613 @@
+# sleigh specification file for Epson S1C33 Processor
+#   >> see docs/languages/sleigh.htm or sleigh.pdf for Sleigh syntax
+# Other language modules (see Ghidra/Processors) may provide better examples
+# when creating a new language module.
+
+# This specification groups extended immediate opcodes with their nearest neighbor. This makes the disassembly
+# more readable but won't work well when the code jumps in-between exts, like one can jump in-between the opcode
+# group of for example `ext 0x1; ext 0x1; and r0, 0x1` to get either `r0 &= 0x1`, `r0 &= 0x41` or `r0 &= 0x80041`.
+# Not sure how rare these are in practice, and we still needs to set GNU33 up and collect a bunch of samples from
+# both GNU33 and in the wild so we can test. If it's proven to be problematic, we might need to provide 2
+# specifications, one for clarity but with lazier decoding and the other for correctness but gives more cryptic
+# disassembly, possibly with comments automatically added by the anal plug. Moreover, we might need to work with the
+# Ghidra devs if Sleigh doesn't support this type of constructions well, as possibly hinted by the mess known as Arm
+# condition codes.
+
+define endian=little;
+define alignment=2;
+
+define space ram type=ram_space size=4 default;
+define space register type=register_space size=2;
+
+# GPRs
+define register offset=0x0000 size=4 [ r0 r1 r2 r3  r4 r5 r6 r7  r8 r9 r10 r11  r12 r13 r14 r15 ];
+# Special registers
+define register offset=0x0040 size=4 [ pc psr sp alr ahr ];
+# PSR mirror registers (operating on these is faster than operating on the CPU PSR)
+define register offset=0x0080 size=1 [ nf zf vf cf ie ds mo il ];
+# Define context bits (if defined, size must be multiple of 4-bytes)
+define register offset=0x0100 size=4   contextreg;
+
+#define context contextreg
+#  extlevel		= (0,0)
+#;
+
+# Flag bits (?? manual is very confusing - could be typos!)
+@define PSR_N "psr[0,1]"
+@define PSR_Z "psr[1,1]"
+@define PSR_V "psr[2,1]"
+@define PSR_C "psr[3,1]"
+@define PSR_IE "psr[4,1]"
+@define PSR_DS "psr[6,1]"
+@define PSR_MO "psr[7,1]"
+@define PSR_IL "psr[8,4]"
+
+
+@define EXT0 "class=6"
+@define EXT1 "class=6; class=6"
+@define C0_SBZ "c0_sbz=0"
+
+## P-code syscalls ##
+
+define pcodeop sleep;
+define pcodeop halt;
+define pcodeop breakpoint;
+define pcodeop debugReturn;
+define pcodeop softwareException;
+define pcodeop zeroDivision;
+
+
+## Opcode format ##
+define token op_unit (16)
+	class = (13, 15)
+	op1 = (10, 12)
+	op2 = (8, 9)
+	c0_op1 = (9, 12)
+	c0_d = (8, 8)
+	c0_op2 = (6, 7)
+	c0_sbz = (4, 5)
+
+	ext0imm13 = (0, 12)
+	ext1imm13 = (0, 12)
+	ext1imm10 = (0, 9)
+	
+	ext0sign13 = (0, 12) signed
+	ext1sign13 = (0, 12) signed
+	ext1sign10 = (0, 9) signed
+
+	imm10 = (0, 9)
+	imm8 = (0, 7)
+	sign8 = (0, 7) signed
+	imm6 = (4, 9)
+	sign6 = (4, 9) signed
+	imm4 = (4, 7)
+	imm3 = (0, 2)
+	imm2 = (0, 1)
+
+	gpr0 = (0, 3)
+	gpr1 = (4, 7)
+	spr = (4, 7)
+	
+	raw = (0, 15)
+;
+
+
+## "Enums" ##
+attach variables [gpr0 gpr1] [ r0 r1 r2 r3  r4 r5 r6 r7  r8 r9 r10 r11  r12 r13 r14 r15 ];
+attach variables [spr] [ psr sp alr ahr  _ _ _ _  _ _ _ _  _ _ _ _ ];
+
+
+## Immediates, PCRELs, etc. ##
+
+# See S1C33000 CORE CPU MANUAL section 2.5.3 for how ext instructions extend immediate values.
+
+# Does not depend on child opcode (must be invoked without ellipsis)
+# NOTE: Child-dependent immediate operands cannot use this as an intermediary unfortunately
+# (i.e. statements like `:inst imm32 is <...> [imm32 = imm26 << 6 + imm6;]` in another operand or instruction would fail)
+# so the extend immediate logic has to be duplicated several times below.
+# imm13
+imm13: _imm13 is class=6 & ext0imm13 {
+	local imm:4 = _imm13;
+	export imm;
+}
+# imm26
+imm26: _imm26 is class=6 & ext1imm13; class=6 & ext0imm13 [ _imm26 = (ext1imm13 << 13) + ext0imm13; ] {
+	local imm:4 = _imm26;
+	export imm;
+}
+
+# Class 0
+# pcrel9
+pcrel9: reloc is class=0 & sign8 [reloc = (inst_next - 2 + (sign8 << 1)) & 0xffffffff; ] {
+	export *[ram]:4 reloc;
+}
+# pcrel22
+pcrel22: reloc is class=6 & ext0sign13; class=0 & imm8 [
+	reloc = (inst_next - 2 + ((ext0sign13 << 9) | (imm8 << 1))) & 0xffffffff;
+] {
+	export *[ram]:4 reloc;
+}
+# pcrel32
+pcrel32: reloc is class=6 & ext1imm10; class=6 & ext0imm13; class=0 & imm8 [
+	reloc = (inst_next - 2 + ((ext1imm10 << 22) | (ext0imm13 << 9) | (imm8 << 1))) & 0xffffffff;
+] {
+	export *[ram]:4 reloc;
+}
+
+# Class2 & 3
+# imm19
+imm19: _imm19 is class=6 & ext0imm13; (class=2 | class=3) & imm6 [ _imm19 = (ext0imm13 << 6) + imm6; ] {
+	local imm:4 = _imm19;
+	export imm;
+}
+# imm32
+imm32: _imm32 is class=6 & ext1imm13; class=6 & ext0imm13; (class=2 | class=3) & imm6 [ _imm32 = (ext1imm13 << 19) | (ext0imm13 << 6) | imm6; ] {
+	local imm:4 = _imm32;
+	export imm;
+}
+
+# Class 3
+# Compact bitmask (sign6 0b101010 -> 0xffffffea)
+mask6: _mask6 is class=3 & sign6 [ _mask6 = sign6 & 0xffffffff; ] {
+	local imm:4 = _mask6;
+	export imm;
+}
+# Compact bitmask (19-bits)
+mask19: _mask19 is class=6 & ext0sign13; class=3 & imm6 [ _mask19 = ((ext0sign13 << 6) | imm6) & 0xffffffff; ] {
+	local imm:4 = _mask19;
+	export imm;
+}
+# Bitmask (32-bits)
+mask32: _mask32 is class=6 & ext1imm13; class=6 & ext0imm13; class=3 & imm6 [ _mask32 = ((ext1imm13 << 19) | (ext0imm13 << 6) | imm6) & 0xffffffff; ] {
+	local imm:4 = _mask32;
+	export imm;
+}
+# sign19
+sign19: _sign19 is class=6 & ext0sign13; class=3 & imm6 [ _sign19 = (ext0sign13 << 6) | imm6; ] {
+	local imm:4 = _sign19;
+	export imm;
+}
+# sign32
+sign32: _sign32 is class=6 & ext1sign13; class=6 & ext0imm13; class=3 & imm6 [ _sign32 = (ext1sign13 << 19) | (ext0imm13 << 6) | imm6; ] {
+	local imm:4 = _sign32;
+	export imm;
+}
+
+
+## Other operands ##
+
+# Jump conditions
+jrcc: "gt" is class=0 & c0_op1=0b0100 { if zf || (nf ^^ vf) goto inst_next; }
+jrcc: "ge" is class=0 & c0_op1=0b0101 { if nf ^^ vf goto inst_next; }
+jrcc: "lt" is class=0 & c0_op1=0b0110 { if !(nf ^^ vf) goto inst_next; }
+jrcc: "le" is class=0 & c0_op1=0b0111 { if !zf && !(nf ^^ vf) goto inst_next; }
+jrcc: "ugt" is class=0 & c0_op1=0b1000 { if zf || cf goto inst_next; }
+jrcc: "uge" is class=0 & c0_op1=0b1001 { if cf goto inst_next; }
+jrcc: "ult" is class=0 & c0_op1=0b1010 { if !cf goto inst_next; }
+jrcc: "ule" is class=0 & c0_op1=0b1011 { if !zf && !cf goto inst_next; }
+jrcc: "eq" is class=0 & c0_op1=0b1100 { if !zf goto inst_next; }
+jrcc: "ne" is class=0 & c0_op1=0b1101 { if zf goto inst_next; }
+
+
+## Macros ##
+
+# Flags
+
+macro resultFlags(result) {
+	nf = (result s< 0);
+	zf = (result == 0);
+}
+
+macro addFlags(a0, a1) {
+	cf = carry(a0, a1);
+	vf = scarry(a0, a1);
+}
+
+macro subFlags(a0, a1) {
+	cf = a0 < a1;
+	vf = sborrow(a0, a1);
+}
+
+# Instructions
+
+macro addImm(gpr, imm) {
+	local result:4 = gpr + imm;
+	addFlags(gpr, imm);
+	resultFlags(result);
+	gpr = result;
+}
+
+macro subImm(gpr, imm) {
+	local result:4 = gpr - imm;
+	subFlags(gpr, imm);
+	resultFlags(result);
+	gpr = result;
+}
+
+macro cmpImm(gpr, signImm) {
+	subFlags(gpr, signImm);
+	resultFlags(gpr - signImm);
+}
+
+macro andImm(gpr, mask) {
+	local result:4 = gpr & mask;
+	resultFlags(result);
+	gpr = result;
+}
+
+macro orImm(gpr, mask) {
+	local result:4 = gpr | mask;
+	resultFlags(result);
+	gpr = result;
+}
+
+macro xorImm(gpr, mask) {
+	local result:4 = gpr ^ mask;
+	resultFlags(result);
+	gpr = result;
+}
+
+macro notImm(gpr, mask) {
+	local result:4 = ~mask;
+	resultFlags(result);
+	gpr = result;
+}
+
+# Pack the PSR mirror registers as the CPU representation. Must be called before reading from the CPU PSR.
+macro packPSR() {
+	$(PSR_N) = nf & 1;
+	$(PSR_Z) = zf & 1;
+	$(PSR_V) = vf & 1;
+	$(PSR_C) = cf & 1;
+	$(PSR_IE) = ie & 1;
+	$(PSR_DS) = ds & 1;
+	$(PSR_MO) = mo & 1;
+	$(PSR_IL) = il & 0xf;
+}
+
+# Unpack the CPU PSR bitfield as the fast PSRs. Must be called after writing to the CPU PSR.
+macro unpackPSR() {
+	nf = $(PSR_N);
+	zf = $(PSR_Z);
+	vf = $(PSR_V);
+	cf = $(PSR_C);
+	ie = $(PSR_IE);
+	ds = $(PSR_DS);
+	mo = $(PSR_MO);
+	il = $(PSR_IL);
+}
+
+
+## Instructions ##
+
+# Class 0 #
+
+:nop is raw=0 {}
+:slp is raw=0x40 { sleep(); }
+:halt is raw=0x80 { halt(); }
+:pushn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
+	local roffset:2 = (&gpr0) + 4;
+	<loopstart>
+	sp = sp - 4;
+	roffset = roffset - 4;
+	*:4 sp = *[register]:4 roffset;
+	if (roffset != &r0) goto <loopstart>;
+}
+:popn {gpr0":"} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
+	local roffset:2 = &r0;
+	<loopstart>
+	*[register]:4 roffset = *:4 sp;
+	roffset = roffset + 4;
+	sp = sp + 4;
+	if (roffset < &gpr0) goto <loopstart>;
+}
+:brk is raw=0x400 { breakpoint(); }
+# TODO ?
+:retd is raw = 0x440 { debugReturn(); }
+:int imm2 is class=0 & c0_op1=0b0010 & c0_op2=0b10 & $(C0_SBZ) & imm2 {
+	packPSR();
+	sp = sp - 4;
+	*:4 sp = inst_next;
+	sp = sp - 4;
+	*:4 sp = psr;
+	softwareException(imm2:1);
+}
+:reti is class=0 & c0_op1=0b0010 & c0_op2=0b11 & $(C0_SBZ) {
+	psr = *:4 sp;
+	sp = sp + 4;
+	local lp = *:4 sp;
+	sp = sp + 4;
+	unpackPSR();
+	return [lp];
+}
+:call gpr0 is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
+	sp = sp - 4;
+	*:4 sp = inst_next;
+	call [gpr0];
+}
+:call.d gpr0 is class=0 & c0_op1=0b0011 & c0_d = 1 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
+	sp = sp - 4;
+	*:4 sp = inst_next;
+	delayslot(1);
+	call [gpr0];
+}
+:ret is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b01 & $(C0_SBZ) {
+	local lp = *:4 sp;
+	sp = sp + 4;
+	return [lp];
+}
+:ret.d is class=0 & c0_op1=0b0011 & c0_d = 1 & c0_op2=0b01 & $(C0_SBZ) {
+	local lp = *:4 sp;
+	sp = sp + 4;
+	delayslot(1);
+	return [lp];
+}
+:jp gpr0 is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b10 & $(C0_SBZ) & gpr0 {
+	goto [gpr0];
+}
+:jp.d gpr0 is class=0 & c0_op1=0b0011 & c0_d = 1 & c0_op2=0b10 & $(C0_SBZ) & gpr0 {
+	delayslot(1);
+	goto [gpr0];
+}
+:jr^jrcc pcrel9 is jrcc & c0_d=0 & pcrel9 {
+	build jrcc;
+	goto pcrel9;
+}
+:jr^jrcc pcrel22 is ($(EXT0); jrcc & c0_d=0) & pcrel22 {
+	build jrcc;
+	goto pcrel22;
+}
+:jr^jrcc pcrel32 is ($(EXT1); jrcc & c0_d=0) & pcrel32 {
+	build jrcc;
+	goto pcrel32;
+}
+# Conditional jump (delayed instruction will execute regardless of whether the jump condition is fulfilled or not)
+:jr^jrcc".d" pcrel9 is jrcc & c0_d=1 & pcrel9 {
+	delayslot(1);
+	build jrcc;
+	goto pcrel9;
+}
+:jr^jrcc".d" pcrel22 is ($(EXT0); jrcc & c0_d=1) & pcrel22 {
+	delayslot(1);
+	build jrcc;
+	goto pcrel22;
+}
+:jr^jrcc".d" pcrel32 is ($(EXT1); jrcc & c0_d=1) & pcrel32 {
+	delayslot(1);
+	build jrcc;
+	goto pcrel32;
+}
+:call pcrel9 is class=0 & c0_op1 = 0b1110 & c0_d=0 & pcrel9 {
+	call pcrel9;
+}
+
+:call pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) {
+	call pcrel22;
+}
+
+:call pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) {
+	call pcrel32;
+}
+
+:call.d pcrel9 is class=0 & c0_op1 = 0b1110 & c0_d=1 & pcrel9 {
+	delayslot(1);
+	call pcrel9;
+}
+
+:call.d pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1110 & c0_d=1) {
+	delayslot(1);
+	call pcrel22;
+}
+:call.d pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1110 & c0_d=1) {
+	delayslot(1);
+	call pcrel32;
+}
+:jp pcrel9 is class=0 & c0_op1 = 0b1111 & c0_d=0 & pcrel9 {
+	goto pcrel9;
+}
+:jp pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) {
+	goto pcrel22;
+}
+:jp pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) {
+	goto pcrel32;
+}
+:jp.d pcrel9 is class=0 & c0_op1 = 0b1111 & c0_d=1 & pcrel9 {
+	delayslot(1);
+	goto pcrel9;
+}
+:jp.d pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1111 & c0_d=1) {
+	delayslot(1);
+	goto pcrel22;
+}
+:jp.d pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1111 & c0_d=1) {
+	delayslot(1);
+	goto pcrel32;
+}
+
+# Class 3 #
+
+:add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 {
+#	local result:4 = gpr0 + imm6;
+#	addFlags(gpr0, imm6);
+#	resultFlags(result);
+#	gpr0 = result;
+	addImm(gpr0, imm6);
+}
+
+:add gpr0, imm19 is ($(EXT0); class=3 & op1=0b000 & gpr0) & imm19 {
+#	build imm19;
+#	local result:4 = gpr0 + imm19;
+#	addFlags(gpr0, imm19);
+#	resultFlags(result);
+#	gpr0 = result;
+	addImm(gpr0, imm19);
+}
+
+:add gpr0, imm32 is ($(EXT1); class=3 & op1=0b000 & gpr0) & imm32 {
+#	build imm32;
+#	local result:4 = gpr0 + imm32;
+#	addFlags(gpr0, imm32);
+#	resultFlags(result);
+#	gpr0 = result;
+	addImm(gpr0, imm32);
+}
+
+:sub gpr0, imm6 is class=3 & op1=0b001 & gpr0 & imm6 {
+#	local result:4 = gpr0 - imm6;
+#	subFlags(gpr0, imm6);
+#	resultFlags(result);
+#	gpr0 = result;
+	subImm(gpr0, imm6);
+}
+
+:sub gpr0, imm19 is ($(EXT0); class=3 & op1=0b001 & gpr0) & imm19 {
+#	build imm19;
+#	local result:4 = gpr0 - imm19;
+#	subFlags(gpr0, imm19);
+#	resultFlags(result);
+#	gpr0 = result;
+	subImm(gpr0, imm19);
+}
+
+:sub gpr0, imm32 is ($(EXT1); class=3 & op1=0b001 & gpr0) & imm32 {
+#	build imm32;
+#	local result:4 = gpr0 - imm32;
+#	subFlags(gpr0, imm32);
+#	resultFlags(result);
+#	gpr0 = result;
+	subImm(gpr0, imm32);
+}
+
+:cmp gpr0, sign6 is class=3 & op1=0b010 & gpr0 & sign6 {
+#	subFlags(gpr0, sign6);
+#	resultFlags(gpr0 - sign6);
+	cmpImm(gpr0, sign6);
+}
+
+:cmp gpr0, sign19 is ($(EXT0); class=3 & op1=0b010 & gpr0) & sign19 {
+#	build sign19;
+#	subFlags(gpr0, sign19);
+#	resultFlags(gpr0 - sign19);
+	cmpImm(gpr0, sign19);
+}
+
+:cmp gpr0, sign32 is ($(EXT1); class=3 & op1=0b010 & gpr0) & sign32 {
+#	build sign32;
+#	subFlags(gpr0, sign32);
+#	resultFlags(gpr0 - sign32);
+	cmpImm(gpr0, sign32);
+}
+
+# ld.w gpr0, sign{6,19,32} but it's basically a mov so just call it that
+:mov gpr0, sign6 is class=3 & op1=0b011 & gpr0 & sign6 {
+	gpr0 = sign6;
+}
+:mov gpr0, sign19 is ($(EXT0); class=3 & op1=0b011 & gpr0) & sign19 {
+#	build sign19;
+	gpr0 = sign19;
+}
+:mov gpr0, sign32 is ($(EXT1); class=3 & op1=0b011 & gpr0) & sign32 {
+#	build sign32;
+	gpr0 = sign32;
+}
+
+:and gpr0, mask6 is class=3 & op1=0b100 & gpr0 & mask6 {
+#	build mask6;
+#	local result:4 = gpr0 & mask6;
+#	resultFlags(result);
+#	gpr0 = result;
+	andImm(gpr0, mask6);
+}
+
+# TODO why does this not work?
+#:and gpr0, mask19 is ... (class=3 & op1=0b100 & gpr0) & mask19 {
+#	gpr0 = gpr0 & mask19;
+#}
+
+:and gpr0, mask19 is ($(EXT0); class=3 & op1=0b100 & gpr0) & mask19 {
+#	build mask19;
+#	local result:4 = gpr0 & mask19;
+#	resultFlags(result);
+#	gpr0 = result;
+	andImm(gpr0, mask19);
+}
+
+:and gpr0, mask32 is ($(EXT1); class=3 & op1=0b100 & gpr0) & mask32 {
+#	build mask32;
+#	local result:4 = gpr0 & mask32;
+#	resultFlags(result);
+#	gpr0 = result;
+	andImm(gpr0, mask32);
+}
+
+:or gpr0, mask6 is class=3 & op1=0b101 & gpr0 & mask6 {
+#	build mask6;
+#	local result:4 = gpr0 | mask6;
+#	resultFlags(result);
+#	gpr0 = result;
+	orImm(gpr0, mask6);
+}
+
+:or gpr0, mask19 is ($(EXT0); class=3 & op1=0b101 & gpr0) & mask19 {
+#	build mask19;
+#	local result:4 = gpr0 | mask19;
+#	resultFlags(result);
+#	gpr0 = result;
+	orImm(gpr0, mask19);
+}
+
+:or gpr0, mask32 is ($(EXT1); class=3 & op1=0b101 & gpr0) & mask32 {
+#	build mask32;
+#	local result:4 = gpr0 | mask32;
+#	resultFlags(result);
+#	gpr0 = result;
+	orImm(gpr0, mask32);
+}
+
+:xor gpr0, mask6 is class=3 & op1=0b110 & gpr0 & mask6 {
+#	build mask6;
+#	local result:4 = gpr0 ^ mask6;
+#	resultFlags(result);
+#	gpr0 = result;
+	xorImm(gpr0, mask6);
+}
+
+:xor gpr0, mask19 is ($(EXT0); class=3 & op1=0b110 & gpr0) & mask19 {
+#	build mask19;
+#	local result:4 = gpr0 ^ mask19;
+#	resultFlags(result);
+#	gpr0 = result;
+	xorImm(gpr0, mask19);
+}
+
+:xor gpr0, mask32 is ($(EXT1); class=3 & op1=0b110 & gpr0) & mask32 {
+#	build mask32;
+#	local result:4 = gpr0 ^ mask32;
+#	resultFlags(result);
+#	gpr0 = result;
+	xorImm(gpr0, mask32);
+}
+
+:not gpr0, mask6 is class=3 & op1=0b111 & gpr0 & mask6 {
+#	build mask6;
+#	local result:4 = ~mask6;
+#	resultFlags(result);
+#	gpr0 = result;
+	notImm(gpr0, mask6);
+}
+
+:not gpr0, mask19 is ($(EXT0); class=3 & op1=0b111 & gpr0) & mask19 {
+#	build mask19;
+#	local result:4 = ~mask19;
+#	resultFlags(result);
+#	gpr0 = result;
+	notImm(gpr0, mask19);
+}
+
+:not gpr0, mask32 is ($(EXT1); class=3 & op1=0b111 & gpr0) & mask32 {
+#	build mask32;
+#	local result:4 = ~mask32;
+#	resultFlags(result);
+#	gpr0 = result;
+	notImm(gpr0, mask32);
+}

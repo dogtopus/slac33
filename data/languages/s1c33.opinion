@@ -1,0 +1,6 @@
+<opinions>
+	<constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
+		<!-- e_machine = 0x6b -->
+		<constraint primary="107" secondary="0" processor="S1C33" size="32" variant="default" />
+	</constraint>
+</opinions>
