@@ -22,7 +22,9 @@ define space register type=register_space size=2;
 # GPRs
 define register offset=0x0000 size=4 [ r0 r1 r2 r3  r4 r5 r6 r7  r8 r9 r10 r11  r12 r13 r14 r15 ];
 # Special registers
-define register offset=0x0040 size=4 [ pc psr sp alr ahr ];
+define register offset=0x0040 size=4 [ psr sp alr ahr  _ _ _ _  _ _ _ _  _ _ _ pc ];
+# 64-bit mirror of alr | (ahr >> 32) for good measure.
+define register offset=0x0040 size=8 [ _ ar  _ _  _ _  _ _ ];
 # PSR mirror registers (operating on these is faster than operating on the CPU PSR)
 define register offset=0x0080 size=1 [ nf zf vf cf ie ds mo il ];
 # Define context bits (if defined, size must be multiple of 4-bytes)
@@ -106,14 +108,12 @@ attach variables [spr] [ psr sp alr ahr  _ _ _ _  _ _ _ _  _ _ _ _ ];
 # (i.e. statements like `:inst imm32 is <...> [imm32 = imm26 << 6 + imm6;]` in another operand or instruction would fail)
 # so the extend immediate logic has to be duplicated several times below.
 # imm13
-imm13: _imm13 is class=6 & ext0imm13 {
-	local imm:4 = _imm13;
-	export imm;
+imm13: ext0imm13 is class=6 & ext0imm13 {
+	export *[const]:4 ext0imm13;
 }
 # imm26
 imm26: _imm26 is class=6 & ext1imm13; class=6 & ext0imm13 [ _imm26 = (ext1imm13 << 13) + ext0imm13; ] {
-	local imm:4 = _imm26;
-	export imm;
+	export *[const]:4 _imm26;
 }
 
 # Class 0
@@ -137,40 +137,35 @@ pcrel32: reloc is class=6 & ext1imm10; class=6 & ext0imm13; class=0 & imm8 [
 # Class2 & 3
 # imm19
 imm19: _imm19 is class=6 & ext0imm13; (class=2 | class=3) & imm6 [ _imm19 = (ext0imm13 << 6) + imm6; ] {
-	local imm:4 = _imm19;
-	export imm;
+	export *[const]:4 _imm19;
 }
 # imm32
 imm32: _imm32 is class=6 & ext1imm13; class=6 & ext0imm13; (class=2 | class=3) & imm6 [ _imm32 = (ext1imm13 << 19) | (ext0imm13 << 6) | imm6; ] {
-	local imm:4 = _imm32;
-	export imm;
+	export *[const]:4 _imm32;
 }
 
 # Class 3
 # Compact bitmask (sign6 0b101010 -> 0xffffffea)
 mask6: _mask6 is class=3 & sign6 [ _mask6 = sign6 & 0xffffffff; ] {
-	local imm:4 = _mask6;
-	export imm;
+	export *[const]:4 _mask6;
 }
 # Compact bitmask (19-bits)
 mask19: _mask19 is class=6 & ext0sign13; class=3 & imm6 [ _mask19 = ((ext0sign13 << 6) | imm6) & 0xffffffff; ] {
-	local imm:4 = _mask19;
-	export imm;
+	export *[const]:4 _mask19;
 }
 # Bitmask (32-bits)
-mask32: _mask32 is class=6 & ext1imm13; class=6 & ext0imm13; class=3 & imm6 [ _mask32 = ((ext1imm13 << 19) | (ext0imm13 << 6) | imm6) & 0xffffffff; ] {
-	local imm:4 = _mask32;
-	export imm;
+mask32: _mask32 is class=6 & ext1imm13; class=6 & ext0imm13; class=3 & imm6 [
+	_mask32 = ((ext1imm13 << 19) | (ext0imm13 << 6) | imm6) & 0xffffffff;
+] {
+	export *[const]:4 _mask32;
 }
 # sign19
 sign19: _sign19 is class=6 & ext0sign13; class=3 & imm6 [ _sign19 = (ext0sign13 << 6) | imm6; ] {
-	local imm:4 = _sign19;
-	export imm;
+	export *[const]:4 _sign19;
 }
 # sign32
 sign32: _sign32 is class=6 & ext1sign13; class=6 & ext0imm13; class=3 & imm6 [ _sign32 = (ext1sign13 << 19) | (ext0imm13 << 6) | imm6; ] {
-	local imm:4 = _sign32;
-	export imm;
+	export *[const]:4 _sign32;
 }
 
 
@@ -416,6 +411,108 @@ macro unpackPSR() {
 	goto pcrel32;
 }
 
+# Class 1 #
+
+:ld.b gpr0, [gpr1] is class=1 & op1=0b000 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:1 gpr1); }
+:ld.b gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b000 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:1 (gpr1 + imm13)); }
+:ld.b gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b000 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:1 (gpr1 + imm26)); }
+:ld.ub gpr0, [gpr1] is class=1 & op1=0b001 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:1 gpr1); }
+:ld.ub gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b001 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:1 (gpr1 + imm13)); }
+:ld.ub gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b001 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:1 (gpr1 + imm26)); }
+
+:ld.h gpr0, [gpr1] is class=1 & op1=0b010 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:2 gpr1); }
+:ld.h gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b010 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:2 (gpr1 + imm13)); }
+:ld.h gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b010 & op2=0b00 & gpr1 & gpr0 { gpr0 = sext(*:2 (gpr1 + imm26)); }
+:ld.uh gpr0, [gpr1] is class=1 & op1=0b011 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:2 gpr1); }
+:ld.uh gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b011 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:2 (gpr1 + imm13)); }
+:ld.uh gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b011 & op2=0b00 & gpr1 & gpr0 { gpr0 = zext(*:2 (gpr1 + imm26)); }
+
+:ld gpr0, [gpr1] is class=1 & op1=0b100 & op2=0b00 & gpr1 & gpr0 { gpr0 = *:4 gpr1; }
+:ld gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b100 & op2=0b00 & gpr1 & gpr0 { gpr0 = *:4 (gpr1 + imm13); }
+:ld gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b100 & op2=0b00 & gpr1 & gpr0 { gpr0 = *:4 (gpr1 + imm26); }
+
+:st.b gpr0, [gpr1] is class=1 & op1=0b101 & op2=0b00 & gpr1 & gpr0 { *gpr1 = gpr0:1; }
+:st.b gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b101 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm13) = gpr0:1; }
+:st.b gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b101 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm26) = gpr0:1; }
+
+:st.h gpr0, [gpr1] is class=1 & op1=0b110 & op2=0b00 & gpr1 & gpr0 { *gpr1 = gpr0:2; }
+:st.h gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b110 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm13) = gpr0:2; }
+:st.h gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b110 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm26) = gpr0:2; }
+
+:st gpr0, [gpr1] is class=1 & op1=0b111 & op2=0b00 & gpr1 & gpr0 { *gpr1 = gpr0; }
+:st gpr0, [gpr1+imm13] is imm13; class=1 & op1=0b111 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm13) = gpr0; }
+:st gpr0, [gpr1+imm26] is imm26; class=1 & op1=0b111 & op2=0b00 & gpr1 & gpr0 { *(gpr1 + imm26) = gpr0; }
+
+:ld.b gpr0, [gpr1]+ is class=1 & op1=0b000 & op2=0b01 & gpr1 & gpr0 {
+	gpr0 = sext(*:1 gpr1);
+	gpr1 = gpr1 + 1;
+}
+:ld.ub gpr0, [gpr1]+ is class=1 & op1=0b001 & op2=0b01 & gpr1 & gpr0 {
+	gpr0 = zext(*:1 gpr1);
+	gpr1 = gpr1 + 1;
+}
+
+:ld.h gpr0, [gpr1]+ is class=1 & op1=0b010 & op2=0b01 & gpr1 & gpr0 {
+	gpr0 = sext(*:2 gpr1);
+	gpr1 = gpr1 + 2;
+}
+:ld.uh gpr0, [gpr1]+ is class=1 & op1=0b011 & op2=0b01 & gpr1 & gpr0 {
+	gpr0 = zext(*:2 gpr1);
+	gpr1 = gpr1 + 2;
+}
+
+:ld gpr0, [gpr1]+ is class=1 & op1=0b100 & op2=0b01 & gpr1 & gpr0 {
+	gpr0 = *:4 gpr1;
+	gpr1 = gpr1 + 4;
+}
+
+:st.b gpr0, [gpr1]+ is class=1 & op1=0b101 & op2=0b01 & gpr1 & gpr0 {
+	*gpr1 = gpr0:1;
+	gpr1 = gpr1 + 1;
+}
+
+:st.h gpr0, [gpr1]+ is class=1 & op1=0b110 & op2=0b01 & gpr1 & gpr0 {
+	*gpr1 = gpr0:2;
+	gpr1 = gpr1 + 2;
+}
+
+:st gpr0, [gpr1]+ is class=1 & op1=0b111 & op2=0b01 & gpr1 & gpr0 {
+	*gpr1 = gpr0;
+	gpr1 = gpr1 + 4;
+}
+
+# Class 2 #
+
+:ld.b gpr0, [sp+imm6] is class=2 & op1=0b000 & gpr0 & imm6 { gpr0 = sext(*:1 (sp + imm6)); }
+:ld.b gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b000 & gpr0) { gpr0 = sext(*:1 (sp + imm19)); }
+:ld.b gpr0, [sp+imm32] is imm32 & ($(EXT1); class=2 & op1=0b000 & gpr0) { gpr0 = sext(*:1 (sp + imm32)); }
+:ld.ub gpr0, [sp+imm6] is class=2 & op1=0b001 & gpr0 & imm6 { gpr0 = zext(*:1 (sp + imm6)); }
+:ld.ub gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b001 & gpr0) { gpr0 = zext(*:1 (sp + imm19)); }
+:ld.ub gpr0, [sp+imm32] is imm32 & ($(EXT1); class=2 & op1=0b001 & gpr0) { gpr0 = zext(*:1 (sp + imm32)); }
+
+:ld.h gpr0, [sp+imm6] is class=2 & op1=0b010 & gpr0 & imm6 { gpr0 = sext(*:2 (sp + imm6)); }
+:ld.h gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b010 & gpr0) { gpr0 = sext(*:2 (sp + imm19)); }
+:ld.h gpr0, [sp+imm32] is imm32 & ($(EXT1); class=2 & op1=0b010 & gpr0) { gpr0 = sext(*:2 (sp + imm32)); }
+:ld.uh gpr0, [sp+imm6] is class=2 & op1=0b011 & gpr0 & imm6 { gpr0 = zext(*:2 (sp + imm6)); }
+:ld.uh gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b011 & gpr0) { gpr0 = zext(*:2 (sp + imm19)); }
+:ld.uh gpr0, [sp+imm32] is imm32 & ($(EXT1); class=2 & op1=0b011 & gpr0) { gpr0 = zext(*:2 (sp + imm32)); }
+
+:ld gpr0, [sp+imm6] is class=2 & op1=0b100 & gpr0 & imm6 { gpr0 = *:4 (sp + imm6); }
+:ld gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b100 & gpr0) { gpr0 = *:4 (sp + imm19); }
+:ld gpr0, [sp+imm32] is imm32 & ($(EXT1); class=2 & op1=0b100 & gpr0) { gpr0 = *:4 (sp + imm32); }
+
+:st.b gpr0, [sp+imm6] is class=2 & op1=0b101 & gpr0 & imm6 { *(sp + imm6) = gpr0:1; }
+:st.b gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b101 & gpr0) { *(sp + imm19) = gpr0:1; }
+:st.b gpr0, [sp+imm32] is imm32 & ($(EXT0); class=2 & op1=0b101 & gpr0) { *(sp + imm32) = gpr0:1; }
+
+:st.h gpr0, [sp+imm6] is class=2 & op1=0b110 & gpr0 & imm6 { *(sp + imm6) = gpr0:2; }
+:st.h gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b110 & gpr0) { *(sp + imm19) = gpr0:2; }
+:st.h gpr0, [sp+imm32] is imm32 & ($(EXT0); class=2 & op1=0b110 & gpr0) { *(sp + imm32) = gpr0:2; }
+
+:st gpr0, [sp+imm6] is class=2 & op1=0b111 & gpr0 & imm6 { *(sp + imm6) = gpr0:2; }
+:st gpr0, [sp+imm19] is imm19 & ($(EXT0); class=2 & op1=0b111 & gpr0) { *(sp + imm19) = gpr0; }
+:st gpr0, [sp+imm32] is imm32 & ($(EXT0); class=2 & op1=0b111 & gpr0) { *(sp + imm32) = gpr0; }
+
 # Class 3 #
 
 :add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 { addImm(gpr0, imm6); }
@@ -430,7 +527,6 @@ macro unpackPSR() {
 :cmp gpr0, sign19 is ($(EXT0); class=3 & op1=0b010 & gpr0) & sign19 { cmpImm(gpr0, sign19); }
 :cmp gpr0, sign32 is ($(EXT1); class=3 & op1=0b010 & gpr0) & sign32 { cmpImm(gpr0, sign32); }
 
-# ld.w gpr0, sign{6,19,32} but it's basically a mov so just call it that
 :mov gpr0, sign6 is class=3 & op1=0b011 & gpr0 & sign6 { gpr0 = sign6; }
 :mov gpr0, sign19 is ($(EXT0); class=3 & op1=0b011 & gpr0) & sign19 { gpr0 = sign19; }
 :mov gpr0, sign32 is ($(EXT1); class=3 & op1=0b011 & gpr0) & sign32 { gpr0 = sign32; }
@@ -450,3 +546,6 @@ macro unpackPSR() {
 :not gpr0, mask6 is class=3 & op1=0b111 & gpr0 & mask6 { notImm(gpr0, mask6); }
 :not gpr0, mask19 is ($(EXT0); class=3 & op1=0b111 & gpr0) & mask19 { notImm(gpr0, mask19); }
 :not gpr0, mask32 is ($(EXT1); class=3 & op1=0b111 & gpr0) & mask32 { notImm(gpr0, mask32); }
+
+# Class 4 #
+
