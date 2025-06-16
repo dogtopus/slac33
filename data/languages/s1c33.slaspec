@@ -51,7 +51,7 @@ define register offset=0x0100 size=4   contextreg;
 
 define pcodeop sleep;
 define pcodeop halt;
-define pcodeop breakpoint;
+define pcodeop debugBreak;
 define pcodeop debugReturn;
 define pcodeop softwareException;
 define pcodeop zeroDivision;
@@ -285,6 +285,7 @@ macro unpackPSR() {
 :nop is raw=0 {}
 :slp is raw=0x40 { sleep(); }
 :halt is raw=0x80 { halt(); }
+
 :pushn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
 	local roffset:2 = (&gpr0) + 4;
 	<loopstart>
@@ -301,9 +302,10 @@ macro unpackPSR() {
 	sp = sp + 4;
 	if (roffset < &gpr0) goto <loopstart>;
 }
-:brk is raw=0x400 { breakpoint(); }
-# TODO ?
+
+:brk is raw=0x400 { debugBreak(); }
 :retd is raw = 0x440 { debugReturn(); }
+
 :int imm2 is class=0 & c0_op1=0b0010 & c0_op2=0b10 & $(C0_SBZ) & imm2 {
 	packPSR();
 	sp = sp - 4;
@@ -320,6 +322,7 @@ macro unpackPSR() {
 	unpackPSR();
 	return [lp];
 }
+
 :call gpr0 is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
 	sp = sp - 4;
 	*:4 sp = inst_next;
@@ -331,6 +334,7 @@ macro unpackPSR() {
 	delayslot(1);
 	call [gpr0];
 }
+
 :ret is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b01 & $(C0_SBZ) {
 	local lp = *:4 sp;
 	sp = sp + 4;
@@ -342,6 +346,7 @@ macro unpackPSR() {
 	delayslot(1);
 	return [lp];
 }
+
 :jp gpr0 is class=0 & c0_op1=0b0011 & c0_d = 0 & c0_op2=0b10 & $(C0_SBZ) & gpr0 {
 	goto [gpr0];
 }
@@ -349,6 +354,7 @@ macro unpackPSR() {
 	delayslot(1);
 	goto [gpr0];
 }
+
 :jr^jrcc pcrel9 is jrcc & c0_d=0 & pcrel9 {
 	build jrcc;
 	goto pcrel9;
@@ -377,23 +383,14 @@ macro unpackPSR() {
 	build jrcc;
 	goto pcrel32;
 }
-:call pcrel9 is class=0 & c0_op1 = 0b1110 & c0_d=0 & pcrel9 {
-	call pcrel9;
-}
 
-:call pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) {
-	call pcrel22;
-}
-
-:call pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) {
-	call pcrel32;
-}
-
+:call pcrel9 is class=0 & c0_op1 = 0b1110 & c0_d=0 & pcrel9 { call pcrel9; }
+:call pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) { call pcrel22; }
+:call pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1110 & c0_d=0) { call pcrel32; }
 :call.d pcrel9 is class=0 & c0_op1 = 0b1110 & c0_d=1 & pcrel9 {
 	delayslot(1);
 	call pcrel9;
 }
-
 :call.d pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1110 & c0_d=1) {
 	delayslot(1);
 	call pcrel22;
@@ -402,15 +399,10 @@ macro unpackPSR() {
 	delayslot(1);
 	call pcrel32;
 }
-:jp pcrel9 is class=0 & c0_op1 = 0b1111 & c0_d=0 & pcrel9 {
-	goto pcrel9;
-}
-:jp pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) {
-	goto pcrel22;
-}
-:jp pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) {
-	goto pcrel32;
-}
+
+:jp pcrel9 is class=0 & c0_op1 = 0b1111 & c0_d=0 & pcrel9 { goto pcrel9; }
+:jp pcrel22 is pcrel22 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) { goto pcrel22; }
+:jp pcrel32 is pcrel32 & ... (class=0 & c0_op1 = 0b1111 & c0_d=0) { goto pcrel32; }
 :jp.d pcrel9 is class=0 & c0_op1 = 0b1111 & c0_d=1 & pcrel9 {
 	delayslot(1);
 	goto pcrel9;
@@ -426,188 +418,35 @@ macro unpackPSR() {
 
 # Class 3 #
 
-:add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 {
-#	local result:4 = gpr0 + imm6;
-#	addFlags(gpr0, imm6);
-#	resultFlags(result);
-#	gpr0 = result;
-	addImm(gpr0, imm6);
-}
+:add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 { addImm(gpr0, imm6); }
+:add gpr0, imm19 is ($(EXT0); class=3 & op1=0b000 & gpr0) & imm19 { addImm(gpr0, imm19); }
+:add gpr0, imm32 is ($(EXT1); class=3 & op1=0b000 & gpr0) & imm32 { addImm(gpr0, imm32); }
 
-:add gpr0, imm19 is ($(EXT0); class=3 & op1=0b000 & gpr0) & imm19 {
-#	build imm19;
-#	local result:4 = gpr0 + imm19;
-#	addFlags(gpr0, imm19);
-#	resultFlags(result);
-#	gpr0 = result;
-	addImm(gpr0, imm19);
-}
+:sub gpr0, imm6 is class=3 & op1=0b001 & gpr0 & imm6 { subImm(gpr0, imm6); }
+:sub gpr0, imm19 is ($(EXT0); class=3 & op1=0b001 & gpr0) & imm19 { subImm(gpr0, imm19); }
+:sub gpr0, imm32 is ($(EXT1); class=3 & op1=0b001 & gpr0) & imm32 { subImm(gpr0, imm32); }
 
-:add gpr0, imm32 is ($(EXT1); class=3 & op1=0b000 & gpr0) & imm32 {
-#	build imm32;
-#	local result:4 = gpr0 + imm32;
-#	addFlags(gpr0, imm32);
-#	resultFlags(result);
-#	gpr0 = result;
-	addImm(gpr0, imm32);
-}
-
-:sub gpr0, imm6 is class=3 & op1=0b001 & gpr0 & imm6 {
-#	local result:4 = gpr0 - imm6;
-#	subFlags(gpr0, imm6);
-#	resultFlags(result);
-#	gpr0 = result;
-	subImm(gpr0, imm6);
-}
-
-:sub gpr0, imm19 is ($(EXT0); class=3 & op1=0b001 & gpr0) & imm19 {
-#	build imm19;
-#	local result:4 = gpr0 - imm19;
-#	subFlags(gpr0, imm19);
-#	resultFlags(result);
-#	gpr0 = result;
-	subImm(gpr0, imm19);
-}
-
-:sub gpr0, imm32 is ($(EXT1); class=3 & op1=0b001 & gpr0) & imm32 {
-#	build imm32;
-#	local result:4 = gpr0 - imm32;
-#	subFlags(gpr0, imm32);
-#	resultFlags(result);
-#	gpr0 = result;
-	subImm(gpr0, imm32);
-}
-
-:cmp gpr0, sign6 is class=3 & op1=0b010 & gpr0 & sign6 {
-#	subFlags(gpr0, sign6);
-#	resultFlags(gpr0 - sign6);
-	cmpImm(gpr0, sign6);
-}
-
-:cmp gpr0, sign19 is ($(EXT0); class=3 & op1=0b010 & gpr0) & sign19 {
-#	build sign19;
-#	subFlags(gpr0, sign19);
-#	resultFlags(gpr0 - sign19);
-	cmpImm(gpr0, sign19);
-}
-
-:cmp gpr0, sign32 is ($(EXT1); class=3 & op1=0b010 & gpr0) & sign32 {
-#	build sign32;
-#	subFlags(gpr0, sign32);
-#	resultFlags(gpr0 - sign32);
-	cmpImm(gpr0, sign32);
-}
+:cmp gpr0, sign6 is class=3 & op1=0b010 & gpr0 & sign6 { cmpImm(gpr0, sign6); }
+:cmp gpr0, sign19 is ($(EXT0); class=3 & op1=0b010 & gpr0) & sign19 { cmpImm(gpr0, sign19); }
+:cmp gpr0, sign32 is ($(EXT1); class=3 & op1=0b010 & gpr0) & sign32 { cmpImm(gpr0, sign32); }
 
 # ld.w gpr0, sign{6,19,32} but it's basically a mov so just call it that
-:mov gpr0, sign6 is class=3 & op1=0b011 & gpr0 & sign6 {
-	gpr0 = sign6;
-}
-:mov gpr0, sign19 is ($(EXT0); class=3 & op1=0b011 & gpr0) & sign19 {
-#	build sign19;
-	gpr0 = sign19;
-}
-:mov gpr0, sign32 is ($(EXT1); class=3 & op1=0b011 & gpr0) & sign32 {
-#	build sign32;
-	gpr0 = sign32;
-}
+:mov gpr0, sign6 is class=3 & op1=0b011 & gpr0 & sign6 { gpr0 = sign6; }
+:mov gpr0, sign19 is ($(EXT0); class=3 & op1=0b011 & gpr0) & sign19 { gpr0 = sign19; }
+:mov gpr0, sign32 is ($(EXT1); class=3 & op1=0b011 & gpr0) & sign32 { gpr0 = sign32; }
 
-:and gpr0, mask6 is class=3 & op1=0b100 & gpr0 & mask6 {
-#	build mask6;
-#	local result:4 = gpr0 & mask6;
-#	resultFlags(result);
-#	gpr0 = result;
-	andImm(gpr0, mask6);
-}
+:and gpr0, mask6 is class=3 & op1=0b100 & gpr0 & mask6 { andImm(gpr0, mask6); }
+:and gpr0, mask19 is ($(EXT0); class=3 & op1=0b100 & gpr0) & mask19 { andImm(gpr0, mask19); }
+:and gpr0, mask32 is ($(EXT1); class=3 & op1=0b100 & gpr0) & mask32 { andImm(gpr0, mask32); }
 
-# TODO why does this not work?
-#:and gpr0, mask19 is ... (class=3 & op1=0b100 & gpr0) & mask19 {
-#	gpr0 = gpr0 & mask19;
-#}
+:or gpr0, mask6 is class=3 & op1=0b101 & gpr0 & mask6 { orImm(gpr0, mask6); }
+:or gpr0, mask19 is ($(EXT0); class=3 & op1=0b101 & gpr0) & mask19 { orImm(gpr0, mask19); }
+:or gpr0, mask32 is ($(EXT1); class=3 & op1=0b101 & gpr0) & mask32 { orImm(gpr0, mask32); }
 
-:and gpr0, mask19 is ($(EXT0); class=3 & op1=0b100 & gpr0) & mask19 {
-#	build mask19;
-#	local result:4 = gpr0 & mask19;
-#	resultFlags(result);
-#	gpr0 = result;
-	andImm(gpr0, mask19);
-}
+:xor gpr0, mask6 is class=3 & op1=0b110 & gpr0 & mask6 { xorImm(gpr0, mask6); }
+:xor gpr0, mask19 is ($(EXT0); class=3 & op1=0b110 & gpr0) & mask19 { xorImm(gpr0, mask19); }
+:xor gpr0, mask32 is ($(EXT1); class=3 & op1=0b110 & gpr0) & mask32 { xorImm(gpr0, mask32); }
 
-:and gpr0, mask32 is ($(EXT1); class=3 & op1=0b100 & gpr0) & mask32 {
-#	build mask32;
-#	local result:4 = gpr0 & mask32;
-#	resultFlags(result);
-#	gpr0 = result;
-	andImm(gpr0, mask32);
-}
-
-:or gpr0, mask6 is class=3 & op1=0b101 & gpr0 & mask6 {
-#	build mask6;
-#	local result:4 = gpr0 | mask6;
-#	resultFlags(result);
-#	gpr0 = result;
-	orImm(gpr0, mask6);
-}
-
-:or gpr0, mask19 is ($(EXT0); class=3 & op1=0b101 & gpr0) & mask19 {
-#	build mask19;
-#	local result:4 = gpr0 | mask19;
-#	resultFlags(result);
-#	gpr0 = result;
-	orImm(gpr0, mask19);
-}
-
-:or gpr0, mask32 is ($(EXT1); class=3 & op1=0b101 & gpr0) & mask32 {
-#	build mask32;
-#	local result:4 = gpr0 | mask32;
-#	resultFlags(result);
-#	gpr0 = result;
-	orImm(gpr0, mask32);
-}
-
-:xor gpr0, mask6 is class=3 & op1=0b110 & gpr0 & mask6 {
-#	build mask6;
-#	local result:4 = gpr0 ^ mask6;
-#	resultFlags(result);
-#	gpr0 = result;
-	xorImm(gpr0, mask6);
-}
-
-:xor gpr0, mask19 is ($(EXT0); class=3 & op1=0b110 & gpr0) & mask19 {
-#	build mask19;
-#	local result:4 = gpr0 ^ mask19;
-#	resultFlags(result);
-#	gpr0 = result;
-	xorImm(gpr0, mask19);
-}
-
-:xor gpr0, mask32 is ($(EXT1); class=3 & op1=0b110 & gpr0) & mask32 {
-#	build mask32;
-#	local result:4 = gpr0 ^ mask32;
-#	resultFlags(result);
-#	gpr0 = result;
-	xorImm(gpr0, mask32);
-}
-
-:not gpr0, mask6 is class=3 & op1=0b111 & gpr0 & mask6 {
-#	build mask6;
-#	local result:4 = ~mask6;
-#	resultFlags(result);
-#	gpr0 = result;
-	notImm(gpr0, mask6);
-}
-
-:not gpr0, mask19 is ($(EXT0); class=3 & op1=0b111 & gpr0) & mask19 {
-#	build mask19;
-#	local result:4 = ~mask19;
-#	resultFlags(result);
-#	gpr0 = result;
-	notImm(gpr0, mask19);
-}
-
-:not gpr0, mask32 is ($(EXT1); class=3 & op1=0b111 & gpr0) & mask32 {
-#	build mask32;
-#	local result:4 = ~mask32;
-#	resultFlags(result);
-#	gpr0 = result;
-	notImm(gpr0, mask32);
-}
+:not gpr0, mask6 is class=3 & op1=0b111 & gpr0 & mask6 { notImm(gpr0, mask6); }
+:not gpr0, mask19 is ($(EXT0); class=3 & op1=0b111 & gpr0) & mask19 { notImm(gpr0, mask19); }
+:not gpr0, mask32 is ($(EXT1); class=3 & op1=0b111 & gpr0) & mask32 { notImm(gpr0, mask32); }
