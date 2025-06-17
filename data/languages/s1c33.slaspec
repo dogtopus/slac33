@@ -84,12 +84,14 @@ define token op_unit (16)
 	sign6 = (4, 9) signed
 	imm4 = (4, 7)
 	sh4cap8 = (7, 7)
+	imm3sbz = (3, 3)
 	imm3 = (0, 2)
 	imm2 = (0, 1)
 
 	gpr0 = (0, 3)
+	spr0 = (0, 3)
 	gpr1 = (4, 7)
-	spr = (4, 7)
+	spr1 = (4, 7)
 	
 	raw = (0, 15)
 ;
@@ -97,7 +99,7 @@ define token op_unit (16)
 
 ## "Enums" ##
 attach variables [gpr0 gpr1] [ r0 r1 r2 r3  r4 r5 r6 r7  r8 r9 r10 r11  r12 r13 r14 r15 ];
-attach variables [spr] [ psr sp alr ahr  _ _ _ _  _ _ _ _  _ _ _ _ ];
+attach variables [spr0 spr1] [ psr sp alr ahr  _ _ _ _  _ _ _ _  _ _ _ _ ];
 
 
 ## Immediates, PCRELs, etc. ##
@@ -330,12 +332,62 @@ macro rolReg(gpr, gprBits) {
 	rolImm(gpr, shifts);
 }
 
-macro scan1(gpr0, gpr1) {
-	local msb:1 = gpr1(3);
+macro scan1(gprDest, gprBits) {
+	local msb:1 = gprBits(3);
 	# Counting leading bit 0s, # of leading bit 0s == position of first bit 1, or 8 if all 0.
 	local result:4 = lzcount(msb);
 	scanResultFlags(result);
-	gpr0 = result;
+	gprDest = result;
+}
+
+macro byteSwap(gprDest, gprSource) {
+	gprDest = (
+		((gprSource & 0xff000000) >> 24) |
+		((gprSource & 0x00ff0000) >> 8) |
+		((gprSource & 0x0000ff00) << 8) |
+		((gprSource & 0x000000ff) << 24)
+	);
+}
+
+macro bitSwap(gprDest, gprSource) {
+	local tmpin:4 = gprSource;
+	local tmpout0:4 = 0;
+	local tmpout1:4 = 0;
+	local tmpout2:4 = 0;
+	local tmpout3:4 = 0;
+	local ctr:1 = 0;
+
+	<loopstart0>
+	tmpout0 = (tmpout0 << 1) | (tmpin & 1);
+	tmpin = tmpin >> 1;
+	ctr = ctr + 1;
+	if (ctr < 8) goto <loopstart0>;
+
+	<loopstart1>
+	tmpout1 = (tmpout1 << 1) | (tmpin & 1);
+	tmpin = tmpin >> 1;
+	ctr = ctr + 1;
+	if (ctr < 16) goto <loopstart1>;
+
+	<loopstart2>
+	tmpout2 = (tmpout2 << 1) | (tmpin & 1);
+	tmpin = tmpin >> 1;
+	ctr = ctr + 1;
+	if (ctr < 24) goto <loopstart2>;
+
+	<loopstart3>
+	tmpout3 = (tmpout3 << 1) | (tmpin & 1);
+	tmpin = tmpin >> 1;
+	ctr = ctr + 1;
+	if (ctr < 32) goto <loopstart3>;
+
+	gprDest = tmpout3;
+	gprDest = gprDest << 8;
+	gprDest = gprDest | tmpout2;
+	gprDest = gprDest << 8;
+	gprDest = gprDest | tmpout1;
+	gprDest = gprDest << 8;
+	gprDest = gprDest | tmpout0;
 }
 
 # Pack the PSR mirror registers as the CPU representation. Must be called before reading from the CPU PSR.
@@ -658,3 +710,144 @@ macro unpackPSR() {
 
 :scan0 gpr0, gpr1 is class=4 & op1=0b010 & op2=0b10 & gpr1 & gpr0 { scan1(gpr0, ~gpr1); }
 :scan1 gpr0, gpr1 is class=4 & op1=0b011 & op2=0b10 & gpr1 & gpr0 { scan1(gpr0, gpr1); }
+
+:swap gpr0, gpr1 is class=4 & op1=0b100 & op2=0b10 & gpr1 & gpr0 { byteSwap(gpr0, gpr1); }
+:mirror gpr0, gpr1 is class=4 & op1=0b101 & op2=0b10 & gpr1 & gpr0 { bitSwap(gpr0, gpr1); }
+
+:div0s gpr1 is class=4 & op1=0b010 & op2=0b11 & gpr0=r0 & gpr1 {
+	if (gpr1 == 0) goto <zerodiv>;
+	ar = sext(alr);
+	ds = ar s< 0;
+	nf = gpr1 s< 0;
+	goto <end>;
+	<zerodiv>
+	zeroDivision();
+	<end>
+}
+:div0u gpr1 is class=4 & op1=0b011 & op2=0b11 & gpr0=r0 & gpr1 {
+	if (gpr1 == 0) goto <zerodiv>;
+	ahr = 0;
+	ds = 0;
+	nf = 0;
+	goto <end>;
+	<zerodiv>
+	zeroDivision();
+	<end>
+}
+
+:div1 gpr1 is class=4 & op1=0b100 & op2=0b11 & gpr0=r0 & gpr1 {
+	ar = ar << 1;
+	local tmp:8;
+	local dvd:8 = zext(ahr) | (zext(ds) << 32);
+	local dvr:8 = zext(gpr1) | (zext(nf) << 32);
+
+	if ds == 0 && nf == 0 goto <case_00>;
+	if ds == 0 && nf == 1 goto <case_01>;
+	if ds == 1 && nf == 0 goto <case_10>;
+	if ds == 1 && nf == 1 goto <case_11>;
+
+	<case_00>
+	tmp = dvd - dvr;
+	if (tmp & 0x100000000) == 0 goto <update>;
+	goto <end>;
+
+	<case_01>
+	tmp = dvd + dvr;
+	if (tmp & 0x100000000) == 0x100000000 goto <update>;
+	goto <end>;
+
+	<case_10>
+	tmp = dvd + dvr;
+	if (tmp & 0x100000000) == 0 goto <update>;
+	goto <end>;
+
+	<case_11>
+	tmp = dvd - dvr;
+	if (tmp & 0x100000000) == 0x100000000 goto <update>;
+	goto <end>;
+
+	<update>
+	ahr = tmp:4;
+	alr = alr | 1;
+
+	<end>
+}
+:div2s gpr1 is class=4 & op1=0b101 & op2=0b11 & gpr0=r0 & gpr1 {
+	if (ds == 0) || ((nf == 0 && (ahr + gpr1) != 0) || (nf == 1 && (ahr - gpr1) != 0)) goto <end>;
+	ahr = 0;
+	alr = alr + 1;
+	<end>
+}
+:div3s is class=4 & op1=0b110 & op2=0b11 & gpr1=r0 & gpr0=r0 {
+	if ds == nf goto <end>;
+	alr = alr ^ 0x80000000;
+	<end>
+}
+
+# Class 5 #
+
+:mov "psr", gpr1 is class=5 & op1=0b000 & op2=0b00 & spr0=psr & gpr1 {
+	psr = gpr1;
+	unpackPSR();
+}
+:mov spr0, gpr1 is class=5 & op1=0b000 & op2=0b00 & gpr1 & spr0 { spr0 = gpr1; }
+:mov gpr0, "psr" is class=5 & op1=0b001 & op2=0b00 & spr1=psr & gpr0 {
+	packPSR();
+	gpr0 = psr;
+}
+:mov gpr0, spr1 is class=5 & op1=0b001 & op2=0b00 & spr1 & gpr0 { gpr0 = spr1; }
+
+:btst [gpr1], imm3 is class=5 & op1=0b010 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = (1 << imm3);
+	zf = (*:1 gpr1) & bm == 0;
+}
+:btst [gpr1+imm13], imm3 is imm13; class=5 & op1=0b010 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = (1 << imm3);
+	zf = (*:1 (gpr1 + imm13)) & bm == 0;
+}
+:btst [gpr1+imm26], imm3 is imm26; class=5 & op1=0b010 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = (1 << imm3);
+	zf = (*:1 (gpr1 + imm26)) & bm == 0;
+}
+:bclr [gpr1], imm3 is class=5 & op1=0b011 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = ~(1 << imm3);
+	*gpr1 = (*:1 gpr1) & bm;
+}
+:bclr [gpr1+imm13], imm3 is imm13; class=5 & op1=0b011 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = ~(1 << imm3);
+	local off = gpr1 + imm13;
+	*off = (*:1 off) & bm;
+}
+:bclr [gpr1+imm26], imm3 is imm26; class=5 & op1=0b011 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = ~(1 << imm3);
+	local off = gpr1 + imm26;
+	*off = (*:1 off) & bm;
+}
+:bset [gpr1], imm3 is class=5 & op1=0b100 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	*gpr1 = (*:1 gpr1) | bm;
+}
+:bset [gpr1+imm13], imm3 is imm13; class=5 & op1=0b100 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	local off = gpr1 + imm13;
+	*off = (*:1 off) | bm;
+}
+:bset [gpr1+imm26], imm3 is imm26; class=5 & op1=0b100 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	local off = gpr1 + imm26;
+	*off = (*:1 off) | bm;
+}
+:bnot [gpr1], imm3 is class=5 & op1=0b101 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	*gpr1 = (*:1 gpr1) ^ bm;
+}
+:bnot [gpr1+imm13], imm3 is imm13; class=5 & op1=0b101 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	local off = gpr1 + imm13;
+	*off = (*:1 off) ^ bm;
+}
+:bnot [gpr1+imm26], imm3 is imm26; class=5 & op1=0b101 & op2=0b00 & gpr1 & imm3 {
+	local bm:1 = 1 << imm3;
+	local off = gpr1 + imm26;
+	*off = (*:1 off) ^ bm;
+}
