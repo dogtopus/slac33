@@ -851,3 +851,46 @@ macro unpackPSR() {
 	local off = gpr1 + imm26;
 	*off = (*:1 off) ^ bm;
 }
+
+:adc gpr0, gpr1 is class=5 & op1=0b110 & op2=0b00 & gpr1 & gpr0 {
+	local tmp = gpr0 + gpr1;
+	cf = carry(gpr0, gpr1) || carry(tmp, zext(cf));
+	vf = scarry(gpr0, gpr1) || scarry(tmp, zext(cf));
+	tmp = tmp + zext(cf);
+	resultFlags(tmp);
+	gpr0 = tmp;
+}
+:sbc gpr0, gpr1 is class=5 & op1=0b111 & op2=0b00 & gpr1 & gpr0 {
+	local tmp = gpr0 - gpr1;
+	cf = (gpr0 < gpr1) || (tmp < zext(cf));
+	vf = sborrow(gpr0, gpr1) || sborrow(tmp, zext(cf));
+	tmp = tmp - zext(cf);
+	resultFlags(tmp);
+	gpr0 = tmp;
+}
+
+:mov.b gpr0, gpr1 is class=5 & op1=0b000 & op2=0b01 & gpr1 & gpr0 { gpr0 = sext(gpr1:1); }
+:mov.ub gpr0, gpr1 is class=5 & op1=0b001 & op2=0b01 & gpr1 & gpr0 { gpr0 = zext(gpr1:1); }
+:mov.h gpr0, gpr1 is class=5 & op1=0b010 & op2=0b01 & gpr1 & gpr0 { gpr0 = sext(gpr1:2); }
+:mov.uh gpr0, gpr1 is class=5 & op1=0b011 & op2=0b01 & gpr1 & gpr0 { gpr0 = zext(gpr1:2); }
+
+:mlt.h gpr0, gpr1 is class=5 & op1=0b000 & op2=0b10 & gpr1 & gpr0 { alr = sext(gpr0:2) * sext(gpr1:2); }
+:mltu.h gpr0, gpr1 is class=5 & op1=0b001 & op2=0b10 & gpr1 & gpr0 { alr = zext(gpr0:2) * zext(gpr1:2); }
+:mlt gpr0, gpr1 is class=5 & op1=0b010 & op2=0b10 & gpr1 & gpr0 { ar = sext(gpr0) * sext(gpr1); }
+:mltu gpr0, gpr1 is class=5 & op1=0b011 & op2=0b10 & gpr1 & gpr0 { ar = zext(gpr0) * zext(gpr1); }
+
+:mac gpr1 is class=5 & op1=0b100 & op2=0b10 & gpr0=r0 & gpr1 {
+	if gpr1 == 0 goto <end>;
+	local regBase:2 = &r0;
+	local regOff:2 = &gpr1 - regBase;
+	local gpra = regBase + ((regOff + 4) & 0xf);
+	local gprb = regBase + ((regOff + 8) & 0xf);
+	<loopstart>
+	local a = *[register]:4 gpra;
+	local b = *[register]:4 gprb;
+	ar = ar + sext(*:2 a) * sext(*:2 b);
+	*[register]:4 gpra = a + 2;
+	*[register]:4 gprb = b + 2;
+	if gpr1 > 0 goto <loopstart>;
+	<end>
+}
