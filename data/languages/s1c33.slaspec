@@ -888,7 +888,10 @@ macro unpackPSR() {
 	<loopstart>
 	local a = *[register]:4 gpra;
 	local b = *[register]:4 gprb;
-	ar = ar + sext(*:2 a) * sext(*:2 b);
+	local q:8 = sext(*:2 a) * sext(*:2 b);
+	# MO should stick until manually reset by the user code
+	mo = mo | carry(ar, q);
+	ar = ar + q;
 	*[register]:4 gpra = a + 2;
 	*[register]:4 gprb = b + 2;
 	if gpr1 > 0 goto <loopstart>;
