@@ -137,6 +137,13 @@ pcrel32: reloc is class=6 & ext1imm10; class=6 & ext0imm13; class=0 & imm8 [
 	export *[ram]:4 reloc;
 }
 
+# Class 2
+# off7
+off7: _off7 is class=2 & imm6 [ _off7 = imm6 << 1; ] { export *[const]:4 _off7; }
+
+# off8
+off8: _off8 is class=2 & imm6 [ _off8 = imm6 << 2; ] { export *[const]:4 _off8; }
+
 # Class2 & 3
 # imm19
 imm19: _imm19 is class=6 & ext0imm13; (class=2 | class=3) & imm6 [ _imm19 = (ext0imm13 << 6) + imm6; ] {
@@ -175,6 +182,7 @@ sign32: _sign32 is class=6 & ext1sign13; class=6 & ext0imm13; class=3 & imm6 [ _
 # sh4
 sh4: cap8 is class=4 & sh4cap8=1 & imm4 [ cap8 = imm4 & 8; ] { export *[const]:1 cap8; }
 sh4: cap7 is class=4 & sh4cap8=0 & imm4 [ cap7 = imm4 & 7; ] { export *[const]:1 cap7; }
+off12: _off12 is class=4 & imm10 [ _off12 = imm10 << 2; ] { export *[const]:4 _off12; }
 
 
 ## Other operands ##
@@ -653,14 +661,14 @@ macro unpackPSR() {
 :ld.ub gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b001 & gpr0) { gpr0 = zext(*:1 (sp + imm19)); }
 :ld.ub gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b001 & gpr0) { gpr0 = zext(*:1 (sp + imm32)); }
 
-:ld.h gpr0, ["sp"+imm6] is class=2 & op1=0b010 & gpr0 & imm6 { gpr0 = sext(*:2 (sp + imm6)); }
+:ld.h gpr0, ["sp"+off7] is class=2 & op1=0b010 & gpr0 & off7 { gpr0 = sext(*:2 (sp + off7)); }
 :ld.h gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b010 & gpr0) { gpr0 = sext(*:2 (sp + imm19)); }
 :ld.h gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b010 & gpr0) { gpr0 = sext(*:2 (sp + imm32)); }
-:ld.uh gpr0, ["sp"+imm6] is class=2 & op1=0b011 & gpr0 & imm6 { gpr0 = zext(*:2 (sp + imm6)); }
+:ld.uh gpr0, ["sp"+off7] is class=2 & op1=0b011 & gpr0 & off7 { gpr0 = zext(*:2 (sp + off7)); }
 :ld.uh gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b011 & gpr0) { gpr0 = zext(*:2 (sp + imm19)); }
 :ld.uh gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b011 & gpr0) { gpr0 = zext(*:2 (sp + imm32)); }
 
-:ld gpr0, ["sp"+imm6] is class=2 & op1=0b100 & gpr0 & imm6 { gpr0 = *:4 (sp + imm6); }
+:ld gpr0, ["sp"+off8] is class=2 & op1=0b100 & gpr0 & off8 { gpr0 = *:4 (sp + off8); }
 :ld gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b100 & gpr0) { gpr0 = *:4 (sp + imm19); }
 :ld gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b100 & gpr0) { gpr0 = *:4 (sp + imm32); }
 
@@ -668,11 +676,11 @@ macro unpackPSR() {
 :st.b gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b101 & gpr0) { *(sp + imm19) = gpr0:1; }
 :st.b gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b101 & gpr0) { *(sp + imm32) = gpr0:1; }
 
-:st.h gpr0, ["sp"+imm6] is class=2 & op1=0b110 & gpr0 & imm6 { *(sp + imm6) = gpr0:2; }
+:st.h gpr0, ["sp"+off7] is class=2 & op1=0b110 & gpr0 & off7 { *(sp + off7) = gpr0:2; }
 :st.h gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b110 & gpr0) { *(sp + imm19) = gpr0:2; }
 :st.h gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b110 & gpr0) { *(sp + imm32) = gpr0:2; }
 
-:st gpr0, ["sp"+imm6] is class=2 & op1=0b111 & gpr0 & imm6 { *(sp + imm6) = gpr0:2; }
+:st gpr0, ["sp"+off8] is class=2 & op1=0b111 & gpr0 & off8 { *(sp + off8) = gpr0:2; }
 :st gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b111 & gpr0) { *(sp + imm19) = gpr0; }
 :st gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b111 & gpr0) { *(sp + imm32) = gpr0; }
 
@@ -712,8 +720,8 @@ macro unpackPSR() {
 
 # Class 4 #
 
-:add "sp", imm10 is class=4 & op1=0b000 & imm10 { sp = sp + imm10; }
-:sub "sp", imm10 is class=4 & op1=0b001 & imm10 { sp = sp - imm10; }
+:add "sp", off12 is class=4 & op1=0b000 & off12 { sp = sp + off12; }
+:sub "sp", off12 is class=4 & op1=0b001 & off12 { sp = sp - off12; }
 
 :srl gpr0, sh4 is class=4 & op1=0b010 & op2=0b00 & gpr0 & sh4 { lsrImm(gpr0, sh4); }
 :sll gpr0, sh4 is class=4 & op1=0b011 & op2=0b00 & gpr0 & sh4 { lslImm(gpr0, sh4); }
