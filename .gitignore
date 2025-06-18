@@ -101,3 +101,5 @@ replay_pid*
 .antProperties.xml
 .classpath
 .project
+build
+.gradle

@@ -431,7 +431,7 @@ macro unpackPSR() {
 	*:4 sp = *[register]:4 roffset;
 	if (roffset != &r0) goto <loopstart>;
 }
-:popn {gpr0":"} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
+:popn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
 	local roffset:2 = &r0;
 	<loopstart>
 	*[register]:4 roffset = *:4 sp;
