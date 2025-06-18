@@ -220,18 +220,18 @@ macro subFlags(a0, a1) {
 
 # Instructions
 
-macro addImm(gpr, imm) {
-	local result:4 = gpr + imm;
-	addFlags(gpr, imm);
+macro addRegImm(dest, src, imm) {
+	local result:4 = src + imm;
+	addFlags(src, imm);
 	resultFlags(result);
-	gpr = result;
+	dest = result;
 }
 
-macro subImm(gpr, imm) {
-	local result:4 = gpr - imm;
-	subFlags(gpr, imm);
+macro subRegImm(dest, src, imm) {
+	local result:4 = src - imm;
+	subFlags(src, imm);
 	resultFlags(result);
-	gpr = result;
+	dest = result;
 }
 
 macro cmpImm(gpr, signImm) {
@@ -239,22 +239,22 @@ macro cmpImm(gpr, signImm) {
 	resultFlags(gpr - signImm);
 }
 
-macro andImm(gpr, mask) {
-	local result:4 = gpr & mask;
+macro andRegImm(dest, src, mask) {
+	local result:4 = src & mask;
 	resultFlags(result);
-	gpr = result;
+	dest = result;
 }
 
-macro orImm(gpr, mask) {
-	local result:4 = gpr | mask;
+macro orRegImm(dest, src, mask) {
+	local result:4 = src | mask;
 	resultFlags(result);
-	gpr = result;
+	dest = result;
 }
 
-macro xorImm(gpr, mask) {
-	local result:4 = gpr ^ mask;
+macro xorRegImm(dest, src, mask) {
+	local result:4 = src ^ mask;
 	resultFlags(result);
-	gpr = result;
+	dest = result;
 }
 
 macro notImm(gpr, mask) {
@@ -623,6 +623,27 @@ macro unpackPSR() {
 	gpr1 = gpr1 + 4;
 }
 
+:add gpr0, gpr1 is class=1 & op1=0b000 & op2=0b10 & gpr1 & gpr0 { addRegImm(gpr0, gpr0, gpr1); }
+:add gpr0, gpr1, imm13 is imm13; class=1 & op1=0b000 & op2=0b10 & gpr1 & gpr0 { addRegImm(gpr0, gpr1, imm13); }
+:add gpr0, gpr1, imm26 is imm26; class=1 & op1=0b000 & op2=0b10 & gpr1 & gpr0 { addRegImm(gpr0, gpr1, imm26); }
+:sub gpr0, gpr1 is class=1 & op1=0b001 & op2=0b10 & gpr1 & gpr0 { subRegImm(gpr0, gpr0, gpr1); }
+:sub gpr0, gpr1, imm13 is imm13; class=1 & op1=0b001 & op2=0b10 & gpr1 & gpr0 { subRegImm(gpr0, gpr1, imm13); }
+:sub gpr0, gpr1, imm26 is imm26; class=1 & op1=0b001 & op2=0b10 & gpr1 & gpr0 { subRegImm(gpr0, gpr1, imm26); }
+:cmp gpr0, gpr1 is class=1 & op1=0b010 & op2=0b10 & gpr1 & gpr0 { cmpImm(gpr0, gpr1); }
+:cmp gpr1, imm13 is imm13; class=1 & op1=0b010 & op2=0b10 & gpr1 { cmpImm(gpr1, imm13); }
+:cmp gpr1, imm26 is imm26; class=1 & op1=0b010 & op2=0b10 & gpr1 { cmpImm(gpr1, imm26); }
+:mov gpr0, gpr1 is class=1 & op1=0b011 & op2=0b10 & gpr1 & gpr0 { gpr0 = gpr1; }
+:and gpr0, gpr1 is class=1 & op1=0b100 & op2=0b10 & gpr1 & gpr0 { andRegImm(gpr0, gpr0, gpr1); }
+:and gpr0, gpr1, imm13 is imm13; class=1 & op1=0b100 & op2=0b10 & gpr1 & gpr0 { andRegImm(gpr0, gpr1, imm13); }
+:and gpr0, gpr1, imm26 is imm26; class=1 & op1=0b100 & op2=0b10 & gpr1 & gpr0 { andRegImm(gpr0, gpr1, imm26); }
+:or gpr0, gpr1 is class=1 & op1=0b101 & op2=0b10 & gpr1 & gpr0 { orRegImm(gpr0, gpr0, gpr1); }
+:or gpr0, gpr1, imm13 is imm13; class=1 & op1=0b101 & op2=0b10 & gpr1 & gpr0 { orRegImm(gpr0, gpr1, imm13); }
+:or gpr0, gpr1, imm26 is imm26; class=1 & op1=0b101 & op2=0b10 & gpr1 & gpr0 { orRegImm(gpr0, gpr1, imm26); }
+:not gpr0, gpr1 is class=1 & op1=0b110 & op2=0b10 & gpr1 & gpr0 { notImm(gpr0, gpr1); }
+:xor gpr0, gpr1 is class=1 & op1=0b111 & op2=0b10 & gpr1 & gpr0 { xorRegImm(gpr0, gpr0, gpr1); }
+:xor gpr0, gpr1, imm13 is imm13; class=1 & op1=0b111 & op2=0b10 & gpr1 & gpr0 { xorRegImm(gpr0, gpr1, imm13); }
+:xor gpr0, gpr1, imm26 is imm26; class=1 & op1=0b111 & op2=0b10 & gpr1 & gpr0 { xorRegImm(gpr0, gpr1, imm26); }
+
 # Class 2 #
 
 :ld.b gpr0, ["sp"+imm6] is class=2 & op1=0b000 & gpr0 & imm6 { gpr0 = sext(*:1 (sp + imm6)); }
@@ -657,13 +678,13 @@ macro unpackPSR() {
 
 # Class 3 #
 
-:add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 { addImm(gpr0, imm6); }
-:add gpr0, imm19 is ($(EXT0); class=3 & op1=0b000 & gpr0) & imm19 { addImm(gpr0, imm19); }
-:add gpr0, imm32 is ($(EXT1); class=3 & op1=0b000 & gpr0) & imm32 { addImm(gpr0, imm32); }
+:add gpr0, imm6 is class=3 & op1=0b000 & gpr0 & imm6 { addRegImm(gpr0, gpr0, imm6); }
+:add gpr0, imm19 is ($(EXT0); class=3 & op1=0b000 & gpr0) & imm19 { addRegImm(gpr0, gpr0, imm19); }
+:add gpr0, imm32 is ($(EXT1); class=3 & op1=0b000 & gpr0) & imm32 { addRegImm(gpr0, gpr0, imm32); }
 
-:sub gpr0, imm6 is class=3 & op1=0b001 & gpr0 & imm6 { subImm(gpr0, imm6); }
-:sub gpr0, imm19 is ($(EXT0); class=3 & op1=0b001 & gpr0) & imm19 { subImm(gpr0, imm19); }
-:sub gpr0, imm32 is ($(EXT1); class=3 & op1=0b001 & gpr0) & imm32 { subImm(gpr0, imm32); }
+:sub gpr0, imm6 is class=3 & op1=0b001 & gpr0 & imm6 { subRegImm(gpr0, gpr0, imm6); }
+:sub gpr0, imm19 is ($(EXT0); class=3 & op1=0b001 & gpr0) & imm19 { subRegImm(gpr0, gpr0, imm19); }
+:sub gpr0, imm32 is ($(EXT1); class=3 & op1=0b001 & gpr0) & imm32 { subRegImm(gpr0, gpr0, imm32); }
 
 :cmp gpr0, sign6 is class=3 & op1=0b010 & gpr0 & sign6 { cmpImm(gpr0, sign6); }
 :cmp gpr0, sign19 is ($(EXT0); class=3 & op1=0b010 & gpr0) & sign19 { cmpImm(gpr0, sign19); }
@@ -673,17 +694,17 @@ macro unpackPSR() {
 :mov gpr0, sign19 is ($(EXT0); class=3 & op1=0b011 & gpr0) & sign19 { gpr0 = sign19; }
 :mov gpr0, sign32 is ($(EXT1); class=3 & op1=0b011 & gpr0) & sign32 { gpr0 = sign32; }
 
-:and gpr0, mask6 is class=3 & op1=0b100 & gpr0 & mask6 { andImm(gpr0, mask6); }
-:and gpr0, mask19 is ($(EXT0); class=3 & op1=0b100 & gpr0) & mask19 { andImm(gpr0, mask19); }
-:and gpr0, mask32 is ($(EXT1); class=3 & op1=0b100 & gpr0) & mask32 { andImm(gpr0, mask32); }
+:and gpr0, mask6 is class=3 & op1=0b100 & gpr0 & mask6 { andRegImm(gpr0, gpr0, mask6); }
+:and gpr0, mask19 is ($(EXT0); class=3 & op1=0b100 & gpr0) & mask19 { andRegImm(gpr0, gpr0, mask19); }
+:and gpr0, mask32 is ($(EXT1); class=3 & op1=0b100 & gpr0) & mask32 { andRegImm(gpr0, gpr0, mask32); }
 
-:or gpr0, mask6 is class=3 & op1=0b101 & gpr0 & mask6 { orImm(gpr0, mask6); }
-:or gpr0, mask19 is ($(EXT0); class=3 & op1=0b101 & gpr0) & mask19 { orImm(gpr0, mask19); }
-:or gpr0, mask32 is ($(EXT1); class=3 & op1=0b101 & gpr0) & mask32 { orImm(gpr0, mask32); }
+:or gpr0, mask6 is class=3 & op1=0b101 & gpr0 & mask6 { orRegImm(gpr0, gpr0, mask6); }
+:or gpr0, mask19 is ($(EXT0); class=3 & op1=0b101 & gpr0) & mask19 { orRegImm(gpr0, gpr0, mask19); }
+:or gpr0, mask32 is ($(EXT1); class=3 & op1=0b101 & gpr0) & mask32 { orRegImm(gpr0, gpr0, mask32); }
 
-:xor gpr0, mask6 is class=3 & op1=0b110 & gpr0 & mask6 { xorImm(gpr0, mask6); }
-:xor gpr0, mask19 is ($(EXT0); class=3 & op1=0b110 & gpr0) & mask19 { xorImm(gpr0, mask19); }
-:xor gpr0, mask32 is ($(EXT1); class=3 & op1=0b110 & gpr0) & mask32 { xorImm(gpr0, mask32); }
+:xor gpr0, mask6 is class=3 & op1=0b110 & gpr0 & mask6 { xorRegImm(gpr0, gpr0, mask6); }
+:xor gpr0, mask19 is ($(EXT0); class=3 & op1=0b110 & gpr0) & mask19 { xorRegImm(gpr0, gpr0, mask19); }
+:xor gpr0, mask32 is ($(EXT1); class=3 & op1=0b110 & gpr0) & mask32 { xorRegImm(gpr0, gpr0, mask32); }
 
 :not gpr0, mask6 is class=3 & op1=0b111 & gpr0 & mask6 { notImm(gpr0, mask6); }
 :not gpr0, mask19 is ($(EXT0); class=3 & op1=0b111 & gpr0) & mask19 { notImm(gpr0, mask19); }
