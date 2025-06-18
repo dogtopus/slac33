@@ -2,44 +2,81 @@
 
 <!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/compiler_spec.rxg -->
 
+<!-- Part of the calling convention is documented in section 2.3 in S1C33 FAMILY APPLICATION NOTE.
+     Difference between epson and gcc compiler spec are documented in section 2.9 of the same manual. -->
+
 <compiler_spec>
+  <!-- TODO Data organization. This is copy-pasted from Arm so some of the values are likely wrong.
+       need to verify with GNU33 source code. -->
   <data_organization>
-    <pointer_size value="4" />
+    <absolute_max_alignment value="0"/>
+    <machine_alignment value="2"/>
+    <default_alignment value="1"/>
+    <default_pointer_alignment value="4"/>
+    <pointer_size value="4"/>
+    <wchar_size value="4"/>
+    <short_size value="2"/>
+    <integer_size value="4"/>
+    <long_size value="4"/>
+    <long_long_size value="8"/>
+    <float_size value="4"/>
+    <double_size value="8"/>
+    <long_double_size value="8"/>
+    <size_alignment_map>
+      <entry size="1" alignment="1"/>
+      <entry size="2" alignment="2"/>
+      <entry size="4" alignment="4"/>
+      <entry size="8" alignment="8"/>
+     </size_alignment_map>
   </data_organization>
   <global>
-    <range space="ram"/>
+    <range space="ram" />
   </global>
-  <stackpointer register="sp" space="ram"/>
+  <stackpointer register="sp" space="ram" growth="negative"/>
   <default_proto>
     <!-- TODO -->
     <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>
-        <pentry minsize="1" maxsize="4">
-          <register name="r4"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4">
-          <register name=r5"/>
-        </pentry>
+        <!-- r6-r9 serve as argument registers (caller save). -->
         <pentry minsize="1" maxsize="4">
           <register name="r6"/>
         </pentry>
         <pentry minsize="1" maxsize="4">
           <register name="r7"/>
         </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="r8"/>
+        </pentry>
+        <pentry minsize="1" maxsize="4">
+          <register name="r9"/>
+        </pentry>
         <pentry minsize="1" maxsize="500" align="4">
           <addr offset="0" space="stack"/>
         </pentry>
       </input>
       <output>
+        <!-- r4 and r5 serve as result registers (caller save). -->
         <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r0"/>
+          <register name="r4"/>
         </pentry>
         <pentry minsize="5" maxsize="8">
-          <addr space="join" piece1="r1" piece2="r0"/>
+          <addr space="join" piece1="r5" piece2="r4"/>
         </pentry>
       </output>
       <unaffected>
-        <!-- TODO -->
+        <!-- r0-r3 are callee save. -->
+        <register name="r0"/>
+        <register name="r1"/>
+        <register name="r2"/>
+        <register name="r3"/>
+        <!-- r10-r15 are reserved for toolchain use. -->
+        <register name="r10"/>
+        <register name="r11"/>
+        <!-- r12-r15 are data offset registers. -->
+        <register name="r12"/>
+        <register name="r13"/>
+        <register name="r14"/>
+        <register name="r15"/>
       </unaffected>
     </prototype>
   </default_proto>

@@ -3,7 +3,7 @@
 <!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
 
 <language_definitions>
-  <language processor="s1c33"
+  <language processor="S1C33"
             endian="little"
             size="32"
             variant="default"
@@ -11,7 +11,7 @@
             slafile="s1c33.sla"
             processorspec="s1c33.pspec"
             id="S1C33:LE:32:default">
-    <description>Epson S1C33</description>
-    <compiler name="default" spec="s1c33.cspec" id="default"/>
+    <description>Epson S1C33000 Processor</description>
+    <compiler name="gcc" spec="s1c33.cspec" id="gcc"/>
   </language>
 </language_definitions>
