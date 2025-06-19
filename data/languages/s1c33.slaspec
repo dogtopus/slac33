@@ -92,6 +92,7 @@ define token op_unit (16)
 	spr0 = (0, 3)
 	gpr1 = (4, 7)
 	spr1 = (4, 7)
+	gpr0b = (0, 3)
 	
 	raw = (0, 15)
 ;
@@ -340,6 +341,16 @@ macro rolReg(gpr, gprBits) {
 	rolImm(gpr, shifts);
 }
 
+macro pushReg4(base, gpr) {
+	base = base - 4;
+	*:4 base = gpr;
+}
+
+macro popReg4(base, gpr) {
+	gpr = *:4 base;
+	base = base + 4;
+}
+
 macro scan1(gprDest, gprBits) {
 	local msb:1 = gprBits(3);
 	# Counting leading bit 0s, # of leading bit 0s == position of first bit 1, or 8 if all 0.
@@ -422,6 +433,73 @@ macro unpackPSR() {
 	il = $(PSR_IL);
 }
 
+# Kevin made me do this...
+pushnR0: is epsilon { pushReg4(sp, r0); }
+pushnR1: is epsilon & pushnR0 { pushReg4(sp, r1); build pushnR0; }
+pushnR2: is epsilon & pushnR1 { pushReg4(sp, r2); build pushnR1; }
+pushnR3: is epsilon & pushnR2 { pushReg4(sp, r3); build pushnR2; }
+pushnR4: is epsilon & pushnR3 { pushReg4(sp, r4); build pushnR3; }
+pushnR5: is epsilon & pushnR4 { pushReg4(sp, r5); build pushnR4; }
+pushnR6: is epsilon & pushnR5 { pushReg4(sp, r6); build pushnR5; }
+pushnR7: is epsilon & pushnR6 { pushReg4(sp, r7); build pushnR6; }
+pushnR8: is epsilon & pushnR7 { pushReg4(sp, r8); build pushnR7; }
+pushnR9: is epsilon & pushnR8 { pushReg4(sp, r9); build pushnR8; }
+pushnR10: is epsilon & pushnR9 { pushReg4(sp, r10); build pushnR9; }
+pushnR11: is epsilon & pushnR10 { pushReg4(sp, r11); build pushnR10; }
+pushnR12: is epsilon & pushnR11 { pushReg4(sp, r12); build pushnR11; }
+pushnR13: is epsilon & pushnR12 { pushReg4(sp, r13); build pushnR12; }
+pushnR14: is epsilon & pushnR13 { pushReg4(sp, r14); build pushnR13; }
+pushnR15: is epsilon & pushnR14 { pushReg4(sp, r15); build pushnR14; }
+pushList: "r0" is gpr0b=0 & pushnR0 { build pushnR0; }
+pushList: "r1" is gpr0b=1 & pushnR1 { build pushnR1; }
+pushList: "r2" is gpr0b=2 & pushnR2 { build pushnR2; }
+pushList: "r3" is gpr0b=3 & pushnR3 { build pushnR3; }
+pushList: "r4" is gpr0b=4 & pushnR4 { build pushnR4; }
+pushList: "r5" is gpr0b=5 & pushnR5 { build pushnR5; }
+pushList: "r6" is gpr0b=6 & pushnR6 { build pushnR6; }
+pushList: "r7" is gpr0b=7 & pushnR7 { build pushnR7; }
+pushList: "r8" is gpr0b=8 & pushnR8 { build pushnR8; }
+pushList: "r9" is gpr0b=9 & pushnR9 { build pushnR9; }
+pushList: "r10" is gpr0b=10 & pushnR10 { build pushnR10; }
+pushList: "r11" is gpr0b=11 & pushnR11 { build pushnR11; }
+pushList: "r12" is gpr0b=12 & pushnR12 { build pushnR12; }
+pushList: "r13" is gpr0b=13 & pushnR13 { build pushnR13; }
+pushList: "r14" is gpr0b=14 & pushnR14 { build pushnR14; }
+pushList: "r15" is gpr0b=15 & pushnR15 { build pushnR15; }
+
+popnR0: is epsilon { popReg4(sp, r0); }
+popnR1: is epsilon & popnR0 { build popnR0; popReg4(sp, r1); }
+popnR2: is epsilon & popnR1 { build popnR1; popReg4(sp, r2); }
+popnR3: is epsilon & popnR2 { build popnR2; popReg4(sp, r3); }
+popnR4: is epsilon & popnR3 { build popnR3; popReg4(sp, r4); }
+popnR5: is epsilon & popnR4 { build popnR4; popReg4(sp, r5); }
+popnR6: is epsilon & popnR5 { build popnR5; popReg4(sp, r6); }
+popnR7: is epsilon & popnR6 { build popnR6; popReg4(sp, r7); }
+popnR8: is epsilon & popnR7 { build popnR7; popReg4(sp, r8); }
+popnR9: is epsilon & popnR8 { build popnR8; popReg4(sp, r9); }
+popnR10: is epsilon & popnR9 { build popnR9; popReg4(sp, r10); }
+popnR11: is epsilon & popnR10 { build popnR10; popReg4(sp, r11); }
+popnR12: is epsilon & popnR11 { build popnR11; popReg4(sp, r12); }
+popnR13: is epsilon & popnR12 { build popnR12; popReg4(sp, r13); }
+popnR14: is epsilon & popnR13 { build popnR13; popReg4(sp, r14); }
+popnR15: is epsilon & popnR14 { build popnR14; popReg4(sp, r15); }
+popList: "r0" is gpr0b=0 & popnR0 { build popnR0; }
+popList: "r1" is gpr0b=1 & popnR1 { build popnR1; }
+popList: "r2" is gpr0b=2 & popnR2 { build popnR2; }
+popList: "r3" is gpr0b=3 & popnR3 { build popnR3; }
+popList: "r4" is gpr0b=4 & popnR4 { build popnR4; }
+popList: "r5" is gpr0b=5 & popnR5 { build popnR5; }
+popList: "r6" is gpr0b=6 & popnR6 { build popnR6; }
+popList: "r7" is gpr0b=7 & popnR7 { build popnR7; }
+popList: "r8" is gpr0b=8 & popnR8 { build popnR8; }
+popList: "r9" is gpr0b=9 & popnR9 { build popnR9; }
+popList: "r10" is gpr0b=10 & popnR10 { build popnR10; }
+popList: "r11" is gpr0b=11 & popnR11 { build popnR11; }
+popList: "r12" is gpr0b=12 & popnR12 { build popnR12; }
+popList: "r13" is gpr0b=13 & popnR13 { build popnR13; }
+popList: "r14" is gpr0b=14 & popnR14 { build popnR14; }
+popList: "r15" is gpr0b=15 & popnR15 { build popnR15; }
+
 
 ## Instructions ##
 
@@ -431,22 +509,17 @@ macro unpackPSR() {
 :slp is raw=0x40 { sleep(); }
 :halt is raw=0x80 { halt(); }
 
-:pushn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b00 & $(C0_SBZ) & gpr0 {
-	local roffset:2 = (&gpr0) + 4;
-	<loopstart>
-	sp = sp - 4;
-	roffset = roffset - 4;
-	*:4 sp = *[register]:4 roffset;
-	if (roffset != &r0) goto <loopstart>;
-}
-:popn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
-	local roffset:2 = &r0;
-	<loopstart>
-	*[register]:4 roffset = *:4 sp;
-	roffset = roffset + 4;
-	sp = sp + 4;
-	if (roffset < &gpr0) goto <loopstart>;
-}
+:pushn {":"pushList} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b00 & $(C0_SBZ) & pushList { build pushList; }
+:popn {":"popList} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & popList { build popList; }
+
+#:popn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
+#	local roffset:2 = &r0;
+#	<loopstart>
+#	*[register]:4 roffset = *:4 sp;
+#	roffset = roffset + 4;
+#	sp = sp + 4;
+#	if (roffset < &gpr0) goto <loopstart>;
+#}
 
 :brk is raw=0x400 { debugBreak(); }
 :retd is raw = 0x440 { debugReturn(); }
@@ -680,7 +753,7 @@ macro unpackPSR() {
 :st.h gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b110 & gpr0) { *(sp + imm19) = gpr0:2; }
 :st.h gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b110 & gpr0) { *(sp + imm32) = gpr0:2; }
 
-:st gpr0, ["sp"+off8] is class=2 & op1=0b111 & gpr0 & off8 { *(sp + off8) = gpr0:2; }
+:st gpr0, ["sp"+off8] is class=2 & op1=0b111 & gpr0 & off8 { *(sp + off8) = gpr0; }
 :st gpr0, ["sp"+imm19] is imm19 & ($(EXT0); class=2 & op1=0b111 & gpr0) { *(sp + imm19) = gpr0; }
 :st gpr0, ["sp"+imm32] is imm32 & ($(EXT1); class=2 & op1=0b111 & gpr0) { *(sp + imm32) = gpr0; }
 

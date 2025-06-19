@@ -3,7 +3,8 @@
 <!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/compiler_spec.rxg -->
 
 <!-- Part of the calling convention is documented in section 2.3 in S1C33 FAMILY APPLICATION NOTE.
-     Difference between epson and gcc compiler spec are documented in section 2.9 of the same manual. -->
+     Difference between epson and gcc compiler spec are documented in section 2.9 of the same manual.
+     Also see section 6.4.4 in S5U1C33001C MANUAL. -->
 
 <compiler_spec>
   <!-- TODO Data organization. This is copy-pasted from Arm so some of the values are likely wrong.
@@ -51,10 +52,11 @@
           <register name="r9"/>
         </pentry>
         <pentry minsize="1" maxsize="500" align="4">
-          <addr offset="0" space="stack"/>
+          <!-- Skipping the Link Pointer that gets pushed automatically by the call instruction. -->
+          <addr offset="4" space="stack"/>
         </pentry>
       </input>
-      <output>
+      <output killedbycall="true">
         <!-- r4 and r5 serve as result registers (caller save). -->
         <pentry minsize="1" maxsize="4" extension="inttype">
           <register name="r4"/>
@@ -69,7 +71,8 @@
         <register name="r1"/>
         <register name="r2"/>
         <register name="r3"/>
-        <!-- r10-r15 are reserved for toolchain use. -->
+        <!-- r10-r15 are reserved for toolchain use. Specifically for accessing tiered data sections. -->
+        <!-- r10-r11 are reserved when -mdp=n is higher than the supported range (i.e. n is 5 or 6) -->
         <register name="r10"/>
         <register name="r11"/>
         <!-- r12-r15 are data offset registers. -->
@@ -77,7 +80,11 @@
         <register name="r13"/>
         <register name="r14"/>
         <register name="r15"/>
+        <register name="sp"/>
       </unaffected>
+      <killedbycall>
+        <register name="r5"/>
+      </killedbycall>
     </prototype>
   </default_proto>
 </compiler_spec>
