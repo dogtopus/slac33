@@ -3,8 +3,8 @@
 
 ### Eclipse ###
 .metadata
-bin/
-tmp/
+/bin/
+/tmp/
 *.tmp
 *.bak
 *.swp
@@ -61,7 +61,7 @@ local.properties
 
 # Uncomment this line if you wish to ignore the project description file.
 # Typically, this file would be tracked if it contains build/dependency configurations:
-#.project
+.project
 
 ### Eclipse Patch ###
 # Spring Boot Tooling
@@ -100,6 +100,5 @@ replay_pid*
 *.sla
 .antProperties.xml
 .classpath
-.project
-build
-.gradle
+/build
+/.gradle
