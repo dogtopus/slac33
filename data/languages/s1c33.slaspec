@@ -359,54 +359,46 @@ macro scan1(gprDest, gprBits) {
 	gprDest = result;
 }
 
-macro byteSwap(gprDest, gprSource) {
-	gprDest = (
-		((gprSource & 0xff000000) >> 24) |
-		((gprSource & 0x00ff0000) >> 8) |
-		((gprSource & 0x0000ff00) << 8) |
-		((gprSource & 0x000000ff) << 24)
-	);
+macro byteSwap(out, in) {
+	local tmp = ((in & 0xff000000) >> 24);
+	tmp = tmp | ((in & 0x00ff0000) >> 8);
+	tmp = tmp | ((in & 0x0000ff00) << 8);
+	out = tmp | ((in & 0x000000ff) << 24);
 }
 
-macro bitSwap(gprDest, gprSource) {
-	local tmpin:4 = gprSource;
-	local tmpout0:4 = 0;
-	local tmpout1:4 = 0;
-	local tmpout2:4 = 0;
-	local tmpout3:4 = 0;
-	local ctr:1 = 0;
-
-	<loopstart0>
-	tmpout0 = (tmpout0 << 1) | (tmpin & 1);
-	tmpin = tmpin >> 1;
-	ctr = ctr + 1;
-	if (ctr < 8) goto <loopstart0>;
-
-	<loopstart1>
-	tmpout1 = (tmpout1 << 1) | (tmpin & 1);
-	tmpin = tmpin >> 1;
-	ctr = ctr + 1;
-	if (ctr < 16) goto <loopstart1>;
-
-	<loopstart2>
-	tmpout2 = (tmpout2 << 1) | (tmpin & 1);
-	tmpin = tmpin >> 1;
-	ctr = ctr + 1;
-	if (ctr < 24) goto <loopstart2>;
-
-	<loopstart3>
-	tmpout3 = (tmpout3 << 1) | (tmpin & 1);
-	tmpin = tmpin >> 1;
-	ctr = ctr + 1;
-	if (ctr < 32) goto <loopstart3>;
-
-	gprDest = tmpout3;
-	gprDest = gprDest << 8;
-	gprDest = gprDest | tmpout2;
-	gprDest = gprDest << 8;
-	gprDest = gprDest | tmpout1;
-	gprDest = gprDest << 8;
-	gprDest = gprDest | tmpout0;
+macro bitSwap(out, in) {
+	local tmp = (in & 0x00000001) << 7;
+	tmp = tmp | (in & 0x00000002) << 5;
+	tmp = tmp | (in & 0x00000004) << 3;
+	tmp = tmp | (in & 0x00000008) << 1;
+	tmp = tmp | (in & 0x00000010) >> 1;
+	tmp = tmp | (in & 0x00000020) >> 3;
+	tmp = tmp | (in & 0x00000040) >> 5;
+	tmp = tmp | (in & 0x00000080) >> 7;
+	tmp = tmp | (in & 0x00000100) << 15;
+	tmp = tmp | (in & 0x00000200) << 13;
+	tmp = tmp | (in & 0x00000400) << 11;
+	tmp = tmp | (in & 0x00000800) << 9;
+	tmp = tmp | (in & 0x00001000) >> 9;
+	tmp = tmp | (in & 0x00002000) >> 11;
+	tmp = tmp | (in & 0x00004000) >> 13;
+	tmp = tmp | (in & 0x00008000) >> 15;
+	tmp = tmp | (in & 0x00010000) << 23;
+	tmp = tmp | (in & 0x00020000) << 21;
+	tmp = tmp | (in & 0x00040000) << 19;
+	tmp = tmp | (in & 0x00080000) << 17;
+	tmp = tmp | (in & 0x00100000) >> 17;
+	tmp = tmp | (in & 0x00200000) >> 19;
+	tmp = tmp | (in & 0x00400000) >> 21;
+	tmp = tmp | (in & 0x00800000) >> 23;
+	tmp = tmp | (in & 0x01000000) << 31;
+	tmp = tmp | (in & 0x02000000) << 29;
+	tmp = tmp | (in & 0x04000000) << 27;
+	tmp = tmp | (in & 0x08000000) << 25;
+	tmp = tmp | (in & 0x10000000) >> 25;
+	tmp = tmp | (in & 0x20000000) >> 27;
+	tmp = tmp | (in & 0x40000000) >> 29;
+	out = tmp | (in & 0x80000000) >> 31;
 }
 
 # Pack the PSR mirror registers as the CPU representation. Must be called before reading from the CPU PSR.
@@ -511,15 +503,6 @@ popList: "r15" is gpr0b=15 & popnR15 { build popnR15; }
 
 :pushn {":"pushList} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b00 & $(C0_SBZ) & pushList { build pushList; }
 :popn {":"popList} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & popList { build popList; }
-
-#:popn {":"gpr0} is class=0 & c0_op1=0b0001 & c0_d=0 & c0_op2=0b01 & $(C0_SBZ) & gpr0 {
-#	local roffset:2 = &r0;
-#	<loopstart>
-#	*[register]:4 roffset = *:4 sp;
-#	roffset = roffset + 4;
-#	sp = sp + 4;
-#	if (roffset < &gpr0) goto <loopstart>;
-#}
 
 :brk is raw=0x400 { debugBreak(); }
 :retd is raw = 0x440 { debugReturn(); }
