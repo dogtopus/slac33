@@ -6,12 +6,12 @@
   <language processor="S1C33"
             endian="little"
             size="32"
-            variant="default"
+            variant="std"
             version="1.0"
             slafile="s1c33.sla"
             processorspec="s1c33.pspec"
-            id="S1C33:LE:32:default">
-    <description>Epson S1C33000 Processor</description>
+            id="S1C33:LE:32:std">
+    <description>Epson S1C33 Standard Processor Core (S1C33000)</description>
     <compiler name="gcc" spec="s1c33.cspec" id="gcc"/>
   </language>
 </language_definitions>

@@ -2,7 +2,11 @@
 
 <opinions>
 	<constraint loader="Executable and Linking Format (ELF)" compilerSpecID="default">
-		<!-- e_machine = 0x6b -->
-		<constraint primary="107" secondary="0" processor="S1C33" size="32" variant="default" />
+		<!-- e_machine = 0x6b e_flag = 0x00?????? -->
+		<constraint primary="107" secondary="0b00000000 ........................" processor="S1C33" size="32" variant="std" />
+		<!-- e_machine = 0x6b e_flag = 0x41?????? -->
+		<constraint primary="107" secondary="0b01000001 ........................" processor="S1C33" size="32" variant="adv" />
+		<!-- e_machine = 0x6b e_flag = 0x50?????? -->
+		<constraint primary="107" secondary="0b01010000 ........................" processor="S1C33" size="32" variant="pe" />
 	</constraint>
 </opinions>
