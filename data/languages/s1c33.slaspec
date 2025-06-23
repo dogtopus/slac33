@@ -71,7 +71,6 @@ define token op_unit (16)
 
 	ext0imm13 = (0, 12)
 	ext1imm13 = (0, 12)
-	ext1imm10 = (0, 9)
 	
 	ext0sign13 = (0, 12) signed
 	ext1sign13 = (0, 12) signed
@@ -132,8 +131,8 @@ pcrel22: reloc is class=6 & ext0sign13; class=0 & imm8 [
 	export *[ram]:4 reloc;
 }
 # pcrel32
-pcrel32: reloc is class=6 & ext1imm10; class=6 & ext0imm13; class=0 & imm8 [
-	reloc = (inst_next - 2 + ((ext1imm10 << 22) | (ext0imm13 << 9) | (imm8 << 1))) & 0xffffffff;
+pcrel32: reloc is class=6 & ext1sign10; class=6 & ext0imm13; class=0 & imm8 [
+	reloc = (inst_next - 2 + ((ext1sign10 << 22) | (ext0imm13 << 9) | (imm8 << 1))) & 0xffffffff;
 ] {
 	export *[ram]:4 reloc;
 }
@@ -939,17 +938,19 @@ popList: "r15" is gpr0b=15 & popnR15 { build popnR15; }
 
 :adc gpr0, gpr1 is class=5 & op1=0b110 & op2=0b00 & gpr1 & gpr0 {
 	local tmp = gpr0 + gpr1;
-	cf = carry(gpr0, gpr1) || carry(tmp, zext(cf));
-	vf = scarry(gpr0, gpr1) || scarry(tmp, zext(cf));
-	tmp = tmp + zext(cf);
+	local oldcf:4 = zext(cf);
+	cf = carry(gpr0, gpr1) || carry(tmp, oldcf);
+	vf = scarry(gpr0, gpr1) || scarry(tmp, oldcf);
+	tmp = tmp + oldcf;
 	resultFlags(tmp);
 	gpr0 = tmp;
 }
 :sbc gpr0, gpr1 is class=5 & op1=0b111 & op2=0b00 & gpr1 & gpr0 {
 	local tmp = gpr0 - gpr1;
-	cf = (gpr0 < gpr1) || (tmp < zext(cf));
-	vf = sborrow(gpr0, gpr1) || sborrow(tmp, zext(cf));
-	tmp = tmp - zext(cf);
+	local oldcf:4 = zext(cf);
+	cf = (gpr0 < gpr1) || (tmp < oldcf);
+	vf = sborrow(gpr0, gpr1) || sborrow(tmp, oldcf);
+	tmp = tmp - oldcf;
 	resultFlags(tmp);
 	gpr0 = tmp;
 }
