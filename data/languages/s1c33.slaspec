@@ -980,6 +980,7 @@ popList: "r15" is gpr0b=15 & popnR15 { build popnR15; }
 	ar = ar + q;
 	*[register]:4 gpra = a + 2;
 	*[register]:4 gprb = b + 2;
-	if gpr1 > 0 goto <loopstart>;
+	gpr1 = gpr1 - 1;
+	if gpr1 != 0 goto <loopstart>;
 	<end>
 }
