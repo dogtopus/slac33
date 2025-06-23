@@ -17,7 +17,6 @@
     <symbol name="OCROM_SoftwareException3" address="ram:0x0080003c" entry="true" type="code_ptr"/>
 
     <symbol name="OCROM_ExternalInterrupt0" address="ram:0x00800040" entry="true" type="code_ptr"/>
-    <symbol name="OCROM_ExternalInterrupt0" address="ram:0x00800040" entry="true" type="code_ptr"/>
     <symbol name="OCROM_ExternalInterrupt1" address="ram:0x00800044" entry="true" type="code_ptr"/>
     <symbol name="OCROM_ExternalInterrupt2" address="ram:0x00800048" entry="true" type="code_ptr"/>
     <symbol name="OCROM_ExternalInterrupt3" address="ram:0x0080004c" entry="true" type="code_ptr"/>
