@@ -7,10 +7,11 @@
      Also see section 6.4.4 in S5U1C33001C MANUAL. -->
 
 <compiler_spec>
-  <!-- TODO Data organization. This is copy-pasted from Arm so some of the values are likely wrong.
-       need to verify with GNU33 source code. -->
+  <!-- Cross-validated with GNU33 and section 6.4.2 of S5U1C33001C MANUAL, but I could've missed something. -->
   <data_organization>
-    <absolute_max_alignment value="0"/>
+    <!-- #define BIGGEST_ALIGNMENT 32 -->
+    <absolute_max_alignment value="4"/>
+    <!-- TODO What is this? -->
     <machine_alignment value="2"/>
     <default_alignment value="1"/>
     <default_pointer_alignment value="4"/>
@@ -27,7 +28,7 @@
       <entry size="1" alignment="1"/>
       <entry size="2" alignment="2"/>
       <entry size="4" alignment="4"/>
-      <entry size="8" alignment="8"/>
+      <entry size="8" alignment="4"/>
      </size_alignment_map>
   </data_organization>
   <global>
@@ -35,7 +36,6 @@
   </global>
   <stackpointer register="sp" space="ram" growth="negative"/>
   <default_proto>
-    <!-- TODO -->
     <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>
         <!-- r6-r9 serve as argument registers (caller save). -->
